@@ -7,7 +7,9 @@ node_modules/
 .expo/
 dist/
 web-build/
+coverage/
 expo-env.d.ts
+public/canvaskit.wasm
 
 # Native
 .kotlin/

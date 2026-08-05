@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 私密安全报告
+    url: https://github.com/baicie/stellar-nav/security/advisories/new
+    about: 请不要在公开 Issue 中发布安全细节或敏感信息。
