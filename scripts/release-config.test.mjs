@@ -194,7 +194,7 @@ test('configures exactly the supported ABI split APKs without a universal APK', 
   assert.match(configured, /stellar-nav-abi-splits/);
   assert.match(
     configured,
-    /enable \(findProperty\('stellarNav\.enableAbiSplits'\) \?: 'true'\)\.toBoolean\(\)/,
+    /enable = \(findProperty\('stellarNav\.enableAbiSplits'\) \?: 'true'\)\.toBoolean\(\)/,
   );
   assert.match(configured, /include "arm64-v8a", "armeabi-v7a", "x86_64"/);
   assert.match(configured, /universalApk false/);
