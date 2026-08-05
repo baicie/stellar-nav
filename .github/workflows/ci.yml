@@ -47,6 +47,9 @@ jobs:
       - name: Core dependency boundary
         run: pnpm check:boundaries
 
+      - name: Release metadata
+        run: pnpm check:release
+
       - name: Tests and coverage
         run: pnpm test:coverage
 

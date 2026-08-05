@@ -2,7 +2,7 @@
   "expo": {
     "name": "缺德导航",
     "slug": "stellar-nav",
-    "version": "0.1.0",
+    "version": "0.0.1",
     "description": "基于真实天文对象的高性能星际导航模拟器。",
     "orientation": "portrait",
     "scheme": "stellar-nav",
@@ -20,6 +20,7 @@
     },
     "android": {
       "package": "com.baicie.stellarnav",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#03070C",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -32,6 +33,6 @@
       "bundler": "metro",
       "favicon": "./assets/favicon.png"
     },
-    "plugins": ["expo-font"]
+    "plugins": ["expo-font", "expo-system-ui"]
   }
 }
