@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  androidReleaseAbis,
+  createAndroidReleaseArtifactPlan,
+  configureAndroidAbiSplits,
   configureAndroidReleaseSigning,
   extractSingleCertificateSha256,
   normalizeCertificateSha256,
@@ -183,6 +186,48 @@ test('replaces Expo debug signing only for the release build type', () => {
   assert.equal(configureAndroidReleaseSigning(configured), configured);
 });
 
+test('configures exactly the supported ABI split APKs without a universal APK', () => {
+  assert.deepEqual(androidReleaseAbis, ['arm64-v8a', 'armeabi-v7a', 'x86_64']);
+
+  const configured = configureAndroidAbiSplits(expoBuildGradleFixture);
+
+  assert.match(configured, /stellar-nav-abi-splits/);
+  assert.match(
+    configured,
+    /enable \(findProperty\('stellarNav\.enableAbiSplits'\) \?: 'true'\)\.toBoolean\(\)/,
+  );
+  assert.match(configured, /include "arm64-v8a", "armeabi-v7a", "x86_64"/);
+  assert.match(configured, /universalApk false/);
+  assert.doesNotMatch(configured, /include .*\bx86\b/);
+  assert.equal(configureAndroidAbiSplits(configured), configured);
+});
+
+test('plans stable Android release artifact names and generated paths', () => {
+  assert.deepEqual(createAndroidReleaseArtifactPlan(), {
+    apks: [
+      {
+        abi: 'arm64-v8a',
+        source: 'android/app/build/outputs/apk/release/app-arm64-v8a-release.apk',
+        target: 'stellar-nav-android-arm64-v8a.apk',
+      },
+      {
+        abi: 'armeabi-v7a',
+        source: 'android/app/build/outputs/apk/release/app-armeabi-v7a-release.apk',
+        target: 'stellar-nav-android-armeabi-v7a.apk',
+      },
+      {
+        abi: 'x86_64',
+        source: 'android/app/build/outputs/apk/release/app-x86_64-release.apk',
+        target: 'stellar-nav-android-x86_64.apk',
+      },
+    ],
+    aab: {
+      source: 'android/app/build/outputs/bundle/release/app-release.aab',
+      target: 'stellar-nav-android.aab',
+    },
+  });
+});
+
 test('fails closed when the Expo Gradle template changes', () => {
   assert.throws(
     () => configureAndroidReleaseSigning('android { buildTypes { release {} } }'),
@@ -191,5 +236,20 @@ test('fails closed when the Expo Gradle template changes', () => {
   assert.throws(
     () => configureAndroidReleaseSigning(`android { ${'// stellar-nav-release-signing'} }`),
     /configuration is incomplete/,
+  );
+  assert.throws(
+    () =>
+      configureAndroidAbiSplits(
+        configureAndroidAbiSplits(expoBuildGradleFixture).replace('reset()', '/* reset removed */'),
+      ),
+    /configuration is incomplete/,
+  );
+  assert.throws(
+    () => configureAndroidAbiSplits('android { buildTypes { release {} } }'),
+    /template changed/,
+  );
+  assert.throws(
+    () => configureAndroidAbiSplits(`${expoBuildGradleFixture}\n\tsplits {}`),
+    /template changed/,
   );
 });

@@ -6,7 +6,7 @@ on:
       version:
         description: 待验证的稳定版本号，不含 v 前缀
         required: true
-        default: 0.0.1
+        default: 0.0.2
         type: string
   push:
     tags:
@@ -99,7 +99,7 @@ jobs:
     if: github.event_name == 'push' || github.ref == 'refs/heads/main'
     needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       attestations: write
       contents: read
@@ -156,7 +156,7 @@ jobs:
           printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > android/app/stellar-nav-release.jks
           chmod 600 android/app/stellar-nav-release.jks
 
-      - name: Build APK and AAB
+      - name: Build AAB and ABI APKs
         working-directory: android
         env:
           NODE_ENV: production
@@ -164,7 +164,16 @@ jobs:
           ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+        run: |
+          set -euo pipefail
+          ./gradlew :app:bundleRelease \
+            -PstellarNav.enableAbiSplits=false \
+            -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86_64 \
+            --no-daemon --stacktrace
+          ./gradlew :app:assembleRelease \
+            -PstellarNav.enableAbiSplits=true \
+            -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86_64 \
+            --no-daemon --stacktrace
 
       - name: Verify signatures and package artifacts
         shell: bash
@@ -172,13 +181,19 @@ jobs:
           RELEASE_VERSION: ${{ needs.verify.outputs.version }}
         run: |
           set -euo pipefail
-          apk_path="android/app/build/outputs/apk/release/app-release.apk"
-          aab_path="android/app/build/outputs/bundle/release/app-release.aab"
+          artifact_plan="$(node scripts/print-android-release-artifacts.mjs)"
           apksigner_path="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
-
-          test -f "${apk_path}"
-          test -f "${aab_path}"
+          aapt_path="$(find "${ANDROID_HOME}/build-tools" -type f -name aapt -print | sort -V | tail -n 1)"
           test -n "${apksigner_path}"
+          test -n "${aapt_path}"
+
+          bundletool_path="${RUNNER_TEMP}/bundletool-all-1.18.3.jar"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar \
+            --output "${bundletool_path}"
+          printf '%s  %s\n' \
+            a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29 \
+            "${bundletool_path}" | sha256sum --check --status
 
           expected_certificate="$(
             jq -er --arg version "${RELEASE_VERSION}" \
@@ -187,16 +202,133 @@ jobs:
               tr -d ':' |
               tr '[:lower:]' '[:upper:]'
           )"
-          apk_verification="$(
-            LC_ALL=C "${apksigner_path}" verify --verbose --print-certs-pem "${apk_path}"
+          if [[ ! "${expected_certificate}" =~ ^[0-9A-F]{64}$ ]]; then
+            echo "发布清单必须且只能提供一个 SHA-256 证书指纹。" >&2
+            exit 1
+          fi
+
+          expected_application_id="$(jq -er '.expo.android.package' app.json)"
+          expected_version_code="$(jq -er '.expo.android.versionCode' app.json)"
+          expected_version_name="$(jq -er '.expo.version' app.json)"
+
+          mkdir -p release/android
+          apk_count=0
+          aab_count=0
+          aab_path=""
+          aab_target=""
+          while IFS=$'\t' read -r artifact_kind abi source_path target_name; do
+            case "${artifact_kind}" in
+              apk)
+                apk_count=$((apk_count + 1))
+                test -f "${source_path}"
+                apk_verification="$(
+                  LC_ALL=C "${apksigner_path}" verify --verbose --print-certs-pem "${source_path}"
+                )"
+                apk_certificate="$(node scripts/extract-certificate-sha256.mjs <<< "${apk_verification}")"
+
+                if [[ ! "${apk_certificate}" =~ ^[0-9A-F]{64}$ ]]; then
+                  echo "无法从 ${abi} APK 提取唯一签名证书的 SHA-256 指纹。" >&2
+                  exit 1
+                fi
+                if [[ "${apk_certificate}" != "${expected_certificate}" ]]; then
+                  echo "${abi} APK 签名证书与发布清单不一致。" >&2
+                  exit 1
+                fi
+
+                apk_badging="$(LC_ALL=C "${aapt_path}" dump badging "${source_path}")"
+                apk_application_id="$(sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" <<< "${apk_badging}")"
+                apk_version_code="$(sed -n "s/^package: .*versionCode='\\([^']*\\)'.*/\\1/p" <<< "${apk_badging}")"
+                apk_version_name="$(sed -n "s/^package: .*versionName='\\([^']*\\)'.*/\\1/p" <<< "${apk_badging}")"
+                if [[ "${apk_application_id}" != "${expected_application_id}" ||
+                  "${apk_version_code}" != "${expected_version_code}" ||
+                  "${apk_version_name}" != "${expected_version_name}" ]]; then
+                  echo "${abi} APK manifest 与发布版本元数据不一致。" >&2
+                  printf '实际: package=%s versionCode=%s versionName=%s\n' \
+                    "${apk_application_id}" "${apk_version_code}" "${apk_version_name}" >&2
+                  exit 1
+                fi
+
+                apk_abis="$(
+                  unzip -Z1 "${source_path}" |
+                    awk -F/ '$1 == "lib" && NF >= 3 { print $2 }' |
+                    sort -u
+                )"
+                if [[ "${apk_abis}" != "${abi}" ]]; then
+                  echo "${abi} APK 必须只包含对应 ABI；实际包含：${apk_abis:-none}" >&2
+                  exit 1
+                fi
+
+                cp "${source_path}" "release/android/${target_name}"
+                ;;
+              aab)
+                aab_count=$((aab_count + 1))
+                aab_path="${source_path}"
+                aab_target="${target_name}"
+                ;;
+              *)
+                echo "未知 Android 产物类型：${artifact_kind}" >&2
+                exit 1
+                ;;
+            esac
+          done <<< "${artifact_plan}"
+
+          if [[ "${apk_count}" -ne 3 || "${aab_count}" -ne 1 ]]; then
+            echo "Android 产物计划必须包含 3 个 ABI APK 和 1 个 AAB。" >&2
+            exit 1
+          fi
+          test -f "${aab_path}"
+
+          aab_abis="$(
+            LC_ALL=C unzip -Z1 "${aab_path}" |
+              awk -F/ '$2 == "lib" && NF >= 4 { print $3 }' |
+              sort -u
           )"
-          apk_certificate="$(node scripts/extract-certificate-sha256.mjs <<< "${apk_verification}")"
+          expected_abis="$(printf '%s\n' arm64-v8a armeabi-v7a x86_64)"
+          if [[ "${aab_abis}" != "${expected_abis}" ]]; then
+            echo "AAB 必须只包含目标 ABI：${expected_abis//$'\n'/, }；实际包含：${aab_abis:-none}" >&2
+            exit 1
+          fi
+          aab_debug_symbol_abis="$(
+            LC_ALL=C unzip -Z1 "${aab_path}" |
+              awk -F/ '$1 == "BUNDLE-METADATA" && $2 == "com.android.tools.build.debugsymbols" && NF >= 4 { print $3 }' |
+              sort -u
+          )"
+          if [[ -n "${aab_debug_symbol_abis}" && "${aab_debug_symbol_abis}" != "${expected_abis}" ]]; then
+            echo "AAB 原生调试符号必须只包含目标 ABI；实际包含：${aab_debug_symbol_abis}" >&2
+            exit 1
+          fi
+
+          aab_application_id="$(
+            java -jar "${bundletool_path}" dump manifest \
+              --bundle="${aab_path}" --xpath=/manifest/@package
+          )"
+          aab_version_code="$(
+            java -jar "${bundletool_path}" dump manifest \
+              --bundle="${aab_path}" --xpath=/manifest/@android:versionCode
+          )"
+          aab_version_name="$(
+            java -jar "${bundletool_path}" dump manifest \
+              --bundle="${aab_path}" --xpath=/manifest/@android:versionName
+          )"
+          if [[ "${aab_application_id}" != "${expected_application_id}" ||
+            "${aab_version_code}" != "${expected_version_code}" ||
+            "${aab_version_name}" != "${expected_version_name}" ]]; then
+            echo "AAB manifest 与发布版本元数据不一致。" >&2
+            printf '实际: package=%s versionCode=%s versionName=%s\n' \
+              "${aab_application_id}" "${aab_version_code}" "${aab_version_name}" >&2
+            exit 1
+          fi
 
           if ! aab_verification="$(
             jarsigner -J-Duser.language=en -J-Duser.country=US \
               -verify -certs "${aab_path}" 2>&1
           )"; then
             echo "AAB JAR 签名验证失败。" >&2
+            printf '%s\n' "${aab_verification}" >&2
+            exit 1
+          fi
+          if grep -Fq 'This jar contains unsigned entries which have not been integrity-checked.' <<< "${aab_verification}"; then
+            echo "AAB 包含未签名条目，无法确认完整性。" >&2
             printf '%s\n' "${aab_verification}" >&2
             exit 1
           fi
@@ -216,39 +348,14 @@ jobs:
             exit 1
           fi
 
-          aab_certificate_details="$(
-            unzip -p "${aab_path}" "${aab_signature_entry}" |
-              keytool -J-Duser.language=en -J-Duser.country=US -printcert
-          )"
           aab_certificate="$(
-            awk '
-              /^[[:space:]]*SHA256: / && !found {
-                value = $0
-                sub(/^[[:space:]]*SHA256: /, "", value)
-                found = 1
-              }
-              END {
-                if (found) print value
-              }
-            ' <<< "${aab_certificate_details}" |
-              tr -d ':' |
-              tr '[:lower:]' '[:upper:]'
+            unzip -p "${aab_path}" "${aab_signature_entry}" |
+              keytool -J-Duser.language=en -J-Duser.country=US -printcert -rfc |
+              node scripts/extract-certificate-sha256.mjs
           )"
 
-          if [[ ! "${expected_certificate}" =~ ^[0-9A-F]{64}$ ]]; then
-            echo "发布清单必须且只能提供一个 SHA-256 证书指纹。" >&2
-            exit 1
-          fi
-          if [[ ! "${apk_certificate}" =~ ^[0-9A-F]{64}$ ]]; then
-            echo "无法从 APK 提取唯一签名证书的 SHA-256 指纹。" >&2
-            exit 1
-          fi
           if [[ ! "${aab_certificate}" =~ ^[0-9A-F]{64}$ ]]; then
             echo "无法从 AAB 签名块提取 leaf 证书 SHA-256 指纹。" >&2
-            exit 1
-          fi
-          if [[ "${apk_certificate}" != "${expected_certificate}" ]]; then
-            echo "APK 签名证书与发布清单不一致。" >&2
             exit 1
           fi
           if [[ "${aab_certificate}" != "${expected_certificate}" ]]; then
@@ -256,9 +363,7 @@ jobs:
             exit 1
           fi
 
-          mkdir -p release/android
-          cp "${apk_path}" "release/android/stellar-nav-android-v${RELEASE_VERSION}.apk"
-          cp "${aab_path}" "release/android/stellar-nav-android-v${RELEASE_VERSION}.aab"
+          cp "${aab_path}" "release/android/${aab_target}"
           cd release/android
           sha256sum ./*.apk ./*.aab > SHA256SUMS.txt
 
@@ -306,9 +411,17 @@ jobs:
           RELEASE_VERSION: ${{ needs.verify.outputs.version }}
         run: |
           set -euo pipefail
-          test -f "stellar-nav-android-v${RELEASE_VERSION}.apk"
-          test -f "stellar-nav-android-v${RELEASE_VERSION}.aab"
-          test -f SHA256SUMS.txt
+          for artifact in \
+            stellar-nav-android-arm64-v8a.apk \
+            stellar-nav-android-armeabi-v7a.apk \
+            stellar-nav-android-x86_64.apk \
+            stellar-nav-android.aab \
+            SHA256SUMS.txt; do
+            test -s "${artifact}"
+          done
+          test "$(find . -maxdepth 1 -type f | wc -l | tr -d ' ')" -eq 5
+          test "$(find . -maxdepth 1 -type f -name '*.apk' | wc -l | tr -d ' ')" -eq 3
+          test "$(find . -maxdepth 1 -type f -name '*.aab' | wc -l | tr -d ' ')" -eq 1
           sha256sum --check SHA256SUMS.txt
 
       - name: Create or repair GitHub release
@@ -323,7 +436,39 @@ jobs:
           test -f "${notes_file}"
 
           if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            gh release upload "${RELEASE_TAG}" release-artifacts/* --clobber --repo "${GITHUB_REPOSITORY}"
+            expected_assets="$(
+              printf '%s\n' \
+                SHA256SUMS.txt \
+                stellar-nav-android-arm64-v8a.apk \
+                stellar-nav-android-armeabi-v7a.apk \
+                stellar-nav-android-x86_64.apk \
+                stellar-nav-android.aab |
+                sort
+            )"
+            actual_assets="$(
+              gh release view "${RELEASE_TAG}" \
+                --json assets --jq '.assets[].name' \
+                --repo "${GITHUB_REPOSITORY}" |
+                sort
+            )"
+            if [[ "${actual_assets}" != "${expected_assets}" ]]; then
+              echo "已存在的 ${RELEASE_TAG} 资产列表与本次发布不一致，拒绝覆盖。" >&2
+              exit 1
+            fi
+
+            existing_assets_dir="$(mktemp -d "${RUNNER_TEMP}/existing-release-assets.XXXXXX")"
+            gh release download "${RELEASE_TAG}" \
+              --pattern '*' \
+              --dir "${existing_assets_dir}" \
+              --repo "${GITHUB_REPOSITORY}"
+            for artifact in release-artifacts/*; do
+              artifact_name="$(basename "${artifact}")"
+              if ! cmp --silent "${artifact}" "${existing_assets_dir}/${artifact_name}"; then
+                echo "已存在的 ${artifact_name} 与本次构建不一致，拒绝覆盖。" >&2
+                exit 1
+              fi
+            done
+
             gh release edit "${RELEASE_TAG}" \
               --title "缺德导航 ${RELEASE_TAG} · Android" \
               --notes-file "${notes_file}" \

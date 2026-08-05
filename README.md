@@ -46,11 +46,28 @@ pnpm verify              # 格式、lint、类型、边界、测试、审计、D
 
 ## Android 发布
 
-`vMAJOR.MINOR.PATCH` 标签会触发 `Android Release` workflow。流水线复跑全部质量门禁，再生成并验证两个独立产物：可直接安装的通用 APK，以及用于商店提交的 AAB；发布页同时附带 SHA-256 校验文件和构建来源证明。当前暂不发布 iOS 包。
+`vMAJOR.MINOR.PATCH` annotated tag 会触发 `Android Release` workflow。流水线复跑全部质量门禁，再生成并验证以下 Android 产物：
 
-版本必须同时写入 `package.json`、`app.json` 和 `docs/releases/manifest.json`，Android `versionCode` 每次发布严格递增，发布证书公开指纹也由该清单锁定。正式签名使用仓库 Actions secrets 中的 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS` 与 `ANDROID_KEY_PASSWORD`，签名文件不会进入 Git；维护者必须保留受保护的离线备份，丢失密钥后无法继续覆盖安装升级。可先从 `main` 手工运行 workflow 做不发布的签名构建演练，演练通过后再创建并推送 annotated tag，例如 `git tag -a v0.0.1 -m "Release v0.0.1"`。
+- `stellar-nav-android-arm64-v8a.apk`：绝大多数现代 Android 真机；
+- `stellar-nav-android-armeabi-v7a.apk`：仍使用 32 位 ARM 的旧设备；
+- `stellar-nav-android-x86_64.apk`：x86_64 模拟器或设备；
+- `stellar-nav-android.aab`：用于应用商店提交，不可直接安装；
+- `SHA256SUMS.txt`：三个 APK 与 AAB 的 SHA-256 校验值。
 
-v0.0.1 发布说明见 [`docs/releases/0.0.1.md`](docs/releases/0.0.1.md)，发布架构决策见 [`ADR-0006`](docs/decisions/0006-android-release-packaging.md)。
+每个 APK 只包含对应 ABI 的原生库，不发布通用 APK，也不提供 32 位 x86 APK。发布页同时保留 GitHub 构建来源证明。当前仅发布 Android，不发布 iOS 包。
+
+版本必须同时写入 `package.json`、`app.json` 和 `docs/releases/manifest.json`，Android `versionCode` 每次发布严格递增，发布证书公开指纹也由该清单锁定。正式签名使用仓库 Actions secrets 中的 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS` 与 `ANDROID_KEY_PASSWORD`，签名文件不会进入 Git；维护者必须保留受保护的离线备份，丢失密钥后无法继续覆盖安装升级。
+
+从 `main` 手工运行 workflow 只做签名构建演练，不创建 GitHub Release。演练通过并合入版本变更后，在与 `origin/main` 一致的干净 `main` 上使用本地脚本先预检、再发布：
+
+```bash
+./scripts/release.sh 0.0.2 --dry-run
+./scripts/release.sh 0.0.2
+```
+
+脚本会验证版本元数据，创建并推送 annotated tag；也可用 `--message` 自定义标签消息。已发布的 tag 和资产不应移动或覆盖。若版本出现阻断问题，应停止分发该版本、在 `main` 回退问题改动，并以更高的版本号和 `versionCode` 发布修复；Android 不支持用较低 `versionCode` 的旧包直接覆盖回滚。
+
+v0.0.2 发布说明见 [`docs/releases/0.0.2.md`](docs/releases/0.0.2.md)，ABI 拆包决策见 [`ADR-0007`](docs/decisions/0007-android-abi-split-releases.md)。v0.0.1 的历史发布方案保留在 [`ADR-0006`](docs/decisions/0006-android-release-packaging.md)。
 
 ## 目录结构
 
@@ -61,7 +78,7 @@ src/core/                平台无关的路线计算、格式化和数据性质
 src/data/                版本化的演示天体、飞船与航线
 src/design/              颜色、间距、字体和圆角令牌
 src/renderer/            Skia 星图渲染适配层
-docs/decisions/          Accepted 架构决策记录
+docs/decisions/          架构决策记录（含已取代历史）
 scripts/                 核心依赖边界和 Web 体积检查
 ```
 

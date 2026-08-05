@@ -1,6 +1,6 @@
 # ADR-0006: 以独立签名任务发布 Android APK 与 AAB
 
-- 状态：Accepted
+- 状态：Superseded by ADR-0007
 - 日期：2026-08-05
 
 ## 背景

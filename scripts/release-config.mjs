@@ -4,6 +4,9 @@ const stableVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const certificateSha256Pattern = /^[0-9A-F]{64}$/;
 const certificatePemPattern = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g;
 const signingMarker = '// stellar-nav-release-signing';
+const abiSplitsMarker = '// stellar-nav-abi-splits';
+
+export const androidReleaseAbis = Object.freeze(['arm64-v8a', 'armeabi-v7a', 'x86_64']);
 
 export function normalizeReleaseVersion(value) {
   const version = value.startsWith('v') ? value.slice(1) : value;
@@ -39,6 +42,20 @@ export function extractSingleCertificateSha256(output) {
   } catch (error) {
     throw new Error('apksigner output contains an invalid X.509 certificate.', { cause: error });
   }
+}
+
+export function createAndroidReleaseArtifactPlan() {
+  return {
+    apks: androidReleaseAbis.map((abi) => ({
+      abi,
+      source: `android/app/build/outputs/apk/release/app-${abi}-release.apk`,
+      target: `stellar-nav-android-${abi}.apk`,
+    })),
+    aab: {
+      source: 'android/app/build/outputs/bundle/release/app-release.aab',
+      target: 'stellar-nav-android.aab',
+    },
+  };
 }
 
 function compareStableVersions(left, right) {
@@ -165,6 +182,43 @@ function findBlockEnd(source, blockStart) {
   }
 
   throw new Error('Android release build block has no closing brace.');
+}
+
+export function configureAndroidAbiSplits(source) {
+  if (source.includes(abiSplitsMarker)) {
+    const requiredLines = [
+      "enable (findProperty('stellarNav.enableAbiSplits') ?: 'true').toBoolean()",
+      'reset()',
+      'include "arm64-v8a", "armeabi-v7a", "x86_64"',
+      'universalApk false',
+    ];
+    if (!requiredLines.every((line) => source.includes(line))) {
+      throw new Error('Android ABI split marker exists but configuration is incomplete.');
+    }
+    return source;
+  }
+
+  if (/^\s*splits\s*\{/m.test(source)) {
+    throw new Error('Android ABI split template changed; refusing an unsafe edit.');
+  }
+
+  const anchor = '    signingConfigs {\n';
+  if (!source.includes(anchor)) {
+    throw new Error('Expo Android ABI split template changed; refusing an unsafe edit.');
+  }
+
+  const splitConfig = `    splits {
+        ${abiSplitsMarker}
+        abi {
+            enable (findProperty('stellarNav.enableAbiSplits') ?: 'true').toBoolean()
+            reset()
+            include "arm64-v8a", "armeabi-v7a", "x86_64"
+            universalApk false
+        }
+    }
+`;
+
+  return source.replace(anchor, `${splitConfig}${anchor}`);
 }
 
 export function configureAndroidReleaseSigning(source) {
