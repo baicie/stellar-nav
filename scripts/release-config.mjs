@@ -187,7 +187,7 @@ function findBlockEnd(source, blockStart) {
 export function configureAndroidAbiSplits(source) {
   if (source.includes(abiSplitsMarker)) {
     const requiredLines = [
-      "enable (findProperty('stellarNav.enableAbiSplits') ?: 'true').toBoolean()",
+      "enable = (findProperty('stellarNav.enableAbiSplits') ?: 'true').toBoolean()",
       'reset()',
       'include "arm64-v8a", "armeabi-v7a", "x86_64"',
       'universalApk false',
@@ -210,7 +210,7 @@ export function configureAndroidAbiSplits(source) {
   const splitConfig = `    splits {
         ${abiSplitsMarker}
         abi {
-            enable (findProperty('stellarNav.enableAbiSplits') ?: 'true').toBoolean()
+            enable = (findProperty('stellarNav.enableAbiSplits') ?: 'true').toBoolean()
             reset()
             include "arm64-v8a", "armeabi-v7a", "x86_64"
             universalApk false
