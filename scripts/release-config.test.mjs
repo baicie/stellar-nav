@@ -3,11 +3,30 @@ import test from 'node:test';
 
 import {
   configureAndroidReleaseSigning,
+  extractSingleCertificateSha256,
   normalizeCertificateSha256,
   normalizeReleaseVersion,
   validateAndroidReleaseHistory,
   validateReleaseMetadata,
 } from './release-config.mjs';
+
+const certificatePemFixture = `-----BEGIN CERTIFICATE-----
+MIICvjCCAaYCCQDtR5T/Z7ujmzANBgkqhkiG9w0BAQsFADAhMR8wHQYDVQQDDBZT
+dGVsbGFyIE5hdiBDSSBGaXh0dXJlMB4XDTI2MDgwNTA3MzU1NVoXDTM2MDgwMjA3
+MzU1NVowITEfMB0GA1UEAwwWU3RlbGxhciBOYXYgQ0kgRml4dHVyZTCCASIwDQYJ
+KoZIhvcNAQEBBQADggEPADCCAQoCggEBAOFvzOlw+i6KQe3hn8QN0kiE/bmtaPO9
+F3xNLGjnK69fESyJMkv/L8FGEkPCVtS+x9g9qojCu2Y8XQSwdD7nOfy89QutChnI
+f2KDH2k1IBsD0FcP15gt9gcIBq94Dff0GmB7HzBR2vvRF3H9x8dMpv8vtcEOf3yb
+QSNLqHqbLmARDgqbgonOO8CGTgbcapRHkobHP9jcxO0/Vg3GoDa77ueSEG4LnYaH
+cCodRTjieE/8j7hH+Xmav/5J2x3vxnf9wmfgI0SV9cA9Pk4U/FOSE/cz7aPMWD/R
+qKmUVpIbqS5SU7duT+pxPDcVrzFwvMXmIpX3Bj3Doz4pwB6iq75wTrECAwEAATAN
+BgkqhkiG9w0BAQsFAAOCAQEAY39+xI7Azn7kcRzk9VNHBx58dQHpI+Jsh2ILiMCG
+thhDqKxCIwTG4yM50LH1t7/IOisISvpURTR0cOINH+hZ0rIWW1HoX9n3wvMQY/2W
+kTCLk9ud2w87IVPbIph3vvOz7JgynjHsJu7xIoUWLf+TkHC6jFjXpGDynY6PPttQ
+dpti6GH/Pk6Xuu3ucheMVV+3Ybw109rHuQJrBSEb5iJzCGAtekm3ADzCAGUSLaWE
+URr8GoQ37NQTiUV9JGY48vkgn32ZU7rj+5q0OkDlgeQsqloZsjRvjMDG3X1pBB57
+JFRDWM5E6CMNn7eiiLmAMrAzFaSsR8SreW02K+3iRv+b8w==
+-----END CERTIFICATE-----`;
 
 const expoBuildGradleFixture = `android {
     signingConfigs {
@@ -138,6 +157,20 @@ test('normalizes and validates Android certificate fingerprints', () => {
     'D4CC2EB0734EE838FF1E0AB369EF2A64B8FA89C2C3AD93479F47869AA6D5DA18',
   );
   assert.throws(() => normalizeCertificateSha256('not-a-certificate'), /SHA-256/);
+});
+
+test('extracts exactly one certificate fingerprint from apksigner PEM output', () => {
+  const output = `Verified using v3 scheme (APK Signature Scheme v3): true\n${certificatePemFixture}\nSigner output complete`;
+
+  assert.equal(
+    extractSingleCertificateSha256(output),
+    '2854EEF761FF49240742D302E2EFF8FC7552791FE364CB555657E631B56DE2F6',
+  );
+  assert.throws(() => extractSingleCertificateSha256('no certificate'), /exactly one/);
+  assert.throws(
+    () => extractSingleCertificateSha256(`${certificatePemFixture}\n${certificatePemFixture}`),
+    /exactly one/,
+  );
 });
 
 test('replaces Expo debug signing only for the release build type', () => {
