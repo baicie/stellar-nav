@@ -1,0 +1,297 @@
+name: Android Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 待验证的稳定版本号，不含 v 前缀
+        required: true
+        default: 0.0.1
+        type: string
+  push:
+    tags:
+      - 'v*.*.*'
+
+concurrency:
+  group: release-android-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify release source
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release version
+        id: release
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            tag="${GITHUB_REF_NAME}"
+            version="${tag#v}"
+          else
+            version="${REQUESTED_VERSION}"
+            tag="v${version}"
+          fi
+
+          if [[ ! "${version}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "版本必须使用稳定的 MAJOR.MINOR.PATCH 格式。" >&2
+            exit 1
+          fi
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Require tagged commits to belong to main
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+
+          tag_ref="refs/tags/${GITHUB_REF_NAME}"
+          if [[ "$(git cat-file -t "${tag_ref}")" != "tag" ]]; then
+            echo "正式发布必须使用 annotated tag：${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
+          tag_commit="$(git rev-parse "${tag_ref}^{commit}")"
+          git merge-base --is-ancestor "${tag_commit}" origin/main
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+        with:
+          version: 10.34.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify release metadata
+        run: pnpm check:release
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+
+      - name: Run quality gates
+        run: pnpm verify
+
+  android:
+    name: Build signed Android packages
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+        with:
+          version: 10.34.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Android native project
+        run: pnpm exec expo prebuild --platform android --no-install --clean
+
+      - name: Configure release signing
+        run: pnpm prepare:android-release
+
+      - name: Restore release keystore
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for secret_name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "缺少 Android 发布签名 secret：${secret_name}" >&2
+              exit 1
+            fi
+          done
+
+          printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > android/app/stellar-nav-release.jks
+          chmod 600 android/app/stellar-nav-release.jks
+
+      - name: Build APK and AAB
+        working-directory: android
+        env:
+          ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_STORE_FILE: stellar-nav-release.jks
+          ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+
+      - name: Verify signatures and package artifacts
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          apk_path="android/app/build/outputs/apk/release/app-release.apk"
+          aab_path="android/app/build/outputs/bundle/release/app-release.aab"
+          apksigner_path="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+
+          test -f "${apk_path}"
+          test -f "${aab_path}"
+          test -n "${apksigner_path}"
+
+          expected_certificate="$(
+            jq -er --arg version "${RELEASE_VERSION}" \
+              '.android.releases[] | select(.version == $version) | .certificateSha256' \
+              docs/releases/manifest.json |
+              tr -d ':' |
+              tr '[:lower:]' '[:upper:]'
+          )"
+          apk_verification="$("${apksigner_path}" verify --verbose --print-certs "${apk_path}")"
+          apk_certificate="$(
+            sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<< "${apk_verification}" |
+              head -n 1 |
+              tr -d ':' |
+              tr '[:lower:]' '[:upper:]'
+          )"
+
+          jarsigner -verify -certs "${aab_path}"
+          aab_certificate="$(
+            keytool -J-Duser.language=en -J-Duser.country=US \
+              -printcert -jarfile "${aab_path}" |
+              sed -n 's/^[[:space:]]*SHA256: //p' |
+              head -n 1 |
+              tr -d ':' |
+              tr '[:lower:]' '[:upper:]'
+          )"
+
+          test -n "${expected_certificate}"
+          test -n "${apk_certificate}"
+          test -n "${aab_certificate}"
+          if [[ "${apk_certificate}" != "${expected_certificate}" ]]; then
+            echo "APK 签名证书与发布清单不一致。" >&2
+            exit 1
+          fi
+          if [[ "${aab_certificate}" != "${expected_certificate}" ]]; then
+            echo "AAB 签名证书与发布清单不一致。" >&2
+            exit 1
+          fi
+
+          mkdir -p release/android
+          cp "${apk_path}" "release/android/stellar-nav-android-v${RELEASE_VERSION}.apk"
+          cp "${aab_path}" "release/android/stellar-nav-android-v${RELEASE_VERSION}.aab"
+          cd release/android
+          sha256sum ./*.apk ./*.aab > SHA256SUMS.txt
+
+      - name: Attest Android packages
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: |
+            release/android/*.apk
+            release/android/*.aab
+
+      - name: Upload Android packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: stellar-nav-android-v${{ needs.verify.outputs.version }}
+          path: release/android/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove restored keystore
+        if: always()
+        run: rm -f android/app/stellar-nav-release.jks
+
+  publish:
+    name: Publish GitHub release
+    if: github.event_name == 'push'
+    needs: [verify, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout release notes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Download Android packages
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: stellar-nav-android-v${{ needs.verify.outputs.version }}
+          path: release-artifacts
+
+      - name: Verify downloaded packages
+        shell: bash
+        working-directory: release-artifacts
+        env:
+          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          test -f "stellar-nav-android-v${RELEASE_VERSION}.apk"
+          test -f "stellar-nav-android-v${RELEASE_VERSION}.aab"
+          test -f SHA256SUMS.txt
+          sha256sum --check SHA256SUMS.txt
+
+      - name: Create or repair GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          notes_file="docs/releases/${RELEASE_VERSION}.md"
+          test -f "${notes_file}"
+
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" release-artifacts/* --clobber --repo "${GITHUB_REPOSITORY}"
+            gh release edit "${RELEASE_TAG}" \
+              --title "缺德导航 ${RELEASE_TAG} · Android" \
+              --notes-file "${notes_file}" \
+              --repo "${GITHUB_REPOSITORY}"
+          else
+            gh release create "${RELEASE_TAG}" release-artifacts/* \
+              --verify-tag \
+              --title "缺德导航 ${RELEASE_TAG} · Android" \
+              --notes-file "${notes_file}" \
+              --repo "${GITHUB_REPOSITORY}"
+          fi

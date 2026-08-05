@@ -1,6 +1,6 @@
 {
   "name": "stellar-nav",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "A high-performance, playful interstellar navigation simulator.",
   "main": "index.ts",
   "dependencies": {
@@ -13,6 +13,7 @@
     "expo-haptics": "~57.0.1",
     "expo-linear-gradient": "~57.0.1",
     "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.2",
     "lucide-react-native": "^1.28.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -56,9 +57,11 @@
     "doctor": "expo-doctor",
     "audit": "pnpm --config.registry=https://registry.npmjs.org/ audit --prod --audit-level high",
     "check:boundaries": "node scripts/check-core-boundary.mjs",
+    "check:release": "node --test scripts/release-config.test.mjs && node scripts/check-release-config.mjs",
+    "prepare:android-release": "node scripts/configure-android-release-signing.mjs",
     "build:web": "expo export --platform web --output-dir dist",
     "check:bundle": "node scripts/check-web-bundle.mjs",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm check:boundaries && pnpm test:coverage && pnpm run audit && pnpm doctor && pnpm build:web && pnpm check:bundle"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm check:boundaries && pnpm check:release && pnpm test:coverage && pnpm run audit && pnpm doctor && pnpm build:web && pnpm check:bundle"
   },
   "engines": {
     "node": ">=22.13 <25",

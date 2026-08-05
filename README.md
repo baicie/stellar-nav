@@ -44,6 +44,14 @@ pnpm test                # 测试
 pnpm verify              # 格式、lint、类型、边界、覆盖率、审计、Doctor、Web 构建
 ```
 
+## Android 发布
+
+`vMAJOR.MINOR.PATCH` 标签会触发 `Android Release` workflow。流水线复跑全部质量门禁，再生成并验证两个独立产物：可直接安装的通用 APK，以及用于商店提交的 AAB；发布页同时附带 SHA-256 校验文件和构建来源证明。当前暂不发布 iOS 包。
+
+版本必须同时写入 `package.json`、`app.json` 和 `docs/releases/manifest.json`，Android `versionCode` 每次发布严格递增，发布证书公开指纹也由该清单锁定。正式签名使用仓库 Actions secrets 中的 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS` 与 `ANDROID_KEY_PASSWORD`，签名文件不会进入 Git；维护者必须保留受保护的离线备份，丢失密钥后无法继续覆盖安装升级。可先从 `main` 手工运行 workflow 做不发布的签名构建演练，演练通过后再创建并推送 annotated tag，例如 `git tag -a v0.0.1 -m "Release v0.0.1"`。
+
+v0.0.1 发布说明见 [`docs/releases/0.0.1.md`](docs/releases/0.0.1.md)，发布架构决策见 [`ADR-0006`](docs/decisions/0006-android-release-packaging.md)。
+
 ## 目录结构
 
 ```text
