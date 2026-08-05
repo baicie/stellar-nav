@@ -1,5 +1,8 @@
+import { X509Certificate } from 'node:crypto';
+
 const stableVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const certificateSha256Pattern = /^[0-9A-F]{64}$/;
+const certificatePemPattern = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g;
 const signingMarker = '// stellar-nav-release-signing';
 
 export function normalizeReleaseVersion(value) {
@@ -20,6 +23,22 @@ export function normalizeCertificateSha256(value) {
   }
 
   return fingerprint;
+}
+
+export function extractSingleCertificateSha256(output) {
+  const certificates = output.match(certificatePemPattern) ?? [];
+
+  if (certificates.length !== 1) {
+    throw new Error(
+      `apksigner output must contain exactly one signing certificate; found ${certificates.length}.`,
+    );
+  }
+
+  try {
+    return normalizeCertificateSha256(new X509Certificate(certificates[0]).fingerprint256);
+  } catch (error) {
+    throw new Error('apksigner output contains an invalid X.509 certificate.', { cause: error });
+  }
 }
 
 function compareStableVersions(left, right) {

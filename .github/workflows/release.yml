@@ -188,22 +188,9 @@ jobs:
               tr '[:lower:]' '[:upper:]'
           )"
           apk_verification="$(
-            LC_ALL=C "${apksigner_path}" verify --verbose --print-certs "${apk_path}"
+            LC_ALL=C "${apksigner_path}" verify --verbose --print-certs-pem "${apk_path}"
           )"
-          apk_certificate="$(
-            awk '
-              /^Signer #1 certificate SHA-256 digest: / && !found {
-                value = $0
-                sub(/^Signer #1 certificate SHA-256 digest: /, "", value)
-                found = 1
-              }
-              END {
-                if (found) print value
-              }
-            ' <<< "${apk_verification}" |
-              tr -d ':' |
-              tr '[:lower:]' '[:upper:]'
-          )"
+          apk_certificate="$(node scripts/extract-certificate-sha256.mjs <<< "${apk_verification}")"
 
           if ! aab_verification="$(
             jarsigner -J-Duser.language=en -J-Duser.country=US \
@@ -253,7 +240,7 @@ jobs:
             exit 1
           fi
           if [[ ! "${apk_certificate}" =~ ^[0-9A-F]{64}$ ]]; then
-            echo "无法从 APK signer #1 提取 SHA-256 证书指纹。" >&2
+            echo "无法从 APK 提取唯一签名证书的 SHA-256 指纹。" >&2
             exit 1
           fi
           if [[ ! "${aab_certificate}" =~ ^[0-9A-F]{64}$ ]]; then
