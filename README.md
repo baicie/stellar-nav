@@ -41,7 +41,7 @@ pnpm web                 # Web 预览
 pnpm ios                 # iOS 模拟器或真机
 pnpm android             # Android 模拟器或真机
 pnpm test                # 测试
-pnpm verify              # 格式、lint、类型、边界、覆盖率、审计、Doctor、Web 构建
+pnpm verify              # 格式、lint、类型、边界、测试、审计、Doctor、Android/Web 构建
 ```
 
 ## Android 发布
