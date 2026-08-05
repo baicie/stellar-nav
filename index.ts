@@ -2,14 +2,12 @@ import { registerRootComponent } from 'expo';
 import { Platform } from 'react-native';
 
 import { bootstrapApp } from './src/app/bootstrap';
+import { loadRenderer } from './src/app/loadRenderer';
 import { StartupErrorScreen } from './src/app/StartupErrorScreen';
 
 void bootstrapApp({
   isWeb: Platform.OS === 'web',
-  loadRenderer: async () => {
-    const { LoadSkiaWeb } = await import('@shopify/react-native-skia/lib/module/web');
-    await LoadSkiaWeb();
-  },
+  loadRenderer,
   loadApp: async () => (await import('./App')).default,
   register: registerRootComponent,
   fallbackComponent: StartupErrorScreen,

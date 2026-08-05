@@ -159,6 +159,7 @@ jobs:
       - name: Build APK and AAB
         working-directory: android
         env:
+          NODE_ENV: production
           ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_STORE_FILE: stellar-nav-release.jks
           ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
