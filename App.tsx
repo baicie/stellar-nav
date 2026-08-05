@@ -1,20 +1,27 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { useFonts, Oxanium_500Medium, Oxanium_700Bold } from '@expo-google-fonts/oxanium';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
+
+import { NavigatorScreen } from './src/app/NavigatorScreen';
+import { colors } from './src/design/tokens';
 
 export default function App() {
+  const [fontsLoaded, fontError] = useFonts({ Oxanium_500Medium, Oxanium_700Bold });
+
+  if (!fontsLoaded && !fontError) {
+    return <View style={styles.loading} />;
+  }
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <SafeAreaProvider>
+      <NavigatorScreen />
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  loading: {
+    backgroundColor: colors.canvas,
     flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
