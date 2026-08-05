@@ -32,10 +32,11 @@
 
 技术依据：
 
-- https://docs.expo.dev/get-started/create-a-project/
-- https://docs.expo.dev/develop/unit-testing/
+- https://docs.expo.dev/versions/v57.0.0/
+- https://docs.expo.dev/versions/v57.0.0/sdk/skia/
+- https://docs.expo.dev/versions/v57.0.0/sdk/reanimated/
 - https://reactnative.dev/docs/performance
-- https://shopify.github.io/react-native-skia/docs/getting-started/installation/
+- https://shopify.github.io/react-native-skia/docs/getting-started/web/
 - https://docs.swmansion.com/react-native-reanimated/docs/fundamentals/getting-started/
 
 ## Commands
@@ -70,7 +71,7 @@ docs/decisions/         架构决策记录
 .github/                CI、依赖更新和协作模板
 ```
 
-依赖方向：`app/components -> renderer -> core`，`data -> core`。`core` 不能导入 React、React Native、Expo 或 Skia。
+依赖方向：`app -> components/renderer/data/core`，`components -> renderer/data/core`，`renderer -> core/design`，`data -> core`。`core` 只能使用 TypeScript 和标准库，不能导入 React、React Native、Expo、Skia 或 Zustand。
 
 ## Code Style
 
@@ -86,7 +87,7 @@ export function estimateTravelTime(distanceLy: number, cruiseSpeedC: number): nu
 }
 ```
 
-- 文件名使用 kebab-case，组件和类型使用 PascalCase，函数和变量使用 camelCase。
+- React 组件文件使用 PascalCase，其他模块文件使用 kebab-case；组件和类型使用 PascalCase，函数和变量使用 camelCase。
 - 禁止 `any`、隐式副作用、未解释的魔法数字和用颜色作为唯一状态提示。
 - 注释只解释非显而易见的原因或性能约束。
 
