@@ -190,24 +190,66 @@ jobs:
           apk_verification="$("${apksigner_path}" verify --verbose --print-certs "${apk_path}")"
           apk_certificate="$(
             sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<< "${apk_verification}" |
-              head -n 1 |
               tr -d ':' |
-              tr '[:lower:]' '[:upper:]'
+              tr '[:lower:]' '[:upper:]' |
+              sort -u
           )"
 
-          jarsigner -verify -certs "${aab_path}"
+          if ! aab_verification="$(
+            jarsigner -J-Duser.language=en -J-Duser.country=US \
+              -verify -certs "${aab_path}" 2>&1
+          )"; then
+            echo "AAB JAR 签名验证失败。" >&2
+            printf '%s\n' "${aab_verification}" >&2
+            exit 1
+          fi
+          if ! grep -Fqx 'jar verified.' <<< "${aab_verification}"; then
+            echo "AAB 未通过 JAR 完整性验证。" >&2
+            printf '%s\n' "${aab_verification}" >&2
+            exit 1
+          fi
+
+          aab_entries="$(unzip -Z1 "${aab_path}")"
+          aab_signature_entry="$(
+            awk '{ name = toupper($0); if (name ~ /^META-INF\/[^\/]+\.(RSA|DSA|EC)$/) print }' \
+              <<< "${aab_entries}"
+          )"
+          if [[ -z "${aab_signature_entry}" || "${aab_signature_entry}" == *$'\n'* ]]; then
+            echo "AAB 必须且只能包含一个签名块。" >&2
+            exit 1
+          fi
+
+          aab_certificate_details="$(
+            unzip -p "${aab_path}" "${aab_signature_entry}" |
+              keytool -J-Duser.language=en -J-Duser.country=US -printcert
+          )"
           aab_certificate="$(
-            keytool -J-Duser.language=en -J-Duser.country=US \
-              -printcert -jarfile "${aab_path}" |
-              sed -n 's/^[[:space:]]*SHA256: //p' |
-              head -n 1 |
+            awk '
+              /^[[:space:]]*SHA256: / && !found {
+                value = $0
+                sub(/^[[:space:]]*SHA256: /, "", value)
+                found = 1
+              }
+              END {
+                if (found) print value
+              }
+            ' <<< "${aab_certificate_details}" |
               tr -d ':' |
               tr '[:lower:]' '[:upper:]'
           )"
 
-          test -n "${expected_certificate}"
-          test -n "${apk_certificate}"
-          test -n "${aab_certificate}"
+          if [[ ! "${expected_certificate}" =~ ^[0-9A-F]{64}$ ]]; then
+            echo "发布清单必须且只能提供一个 SHA-256 证书指纹。" >&2
+            exit 1
+          fi
+          if [[ ! "${apk_certificate}" =~ ^[0-9A-F]{64}$ ]]; then
+            echo "APK 必须且只能包含一个签名证书。" >&2
+            exit 1
+          fi
+          if [[ ! "${aab_certificate}" =~ ^[0-9A-F]{64}$ ]]; then
+            echo "无法从 AAB 签名块提取 leaf 证书 SHA-256 指纹。" >&2
+            exit 1
+          fi
           if [[ "${apk_certificate}" != "${expected_certificate}" ]]; then
             echo "APK 签名证书与发布清单不一致。" >&2
             exit 1
