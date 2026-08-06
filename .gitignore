@@ -31,6 +31,7 @@
 **/ios/Flutter/.last_build_id
 **/build/
 /coverage/
+/release/
 /android/app/debug/
 /android/app/profile/
 /android/app/release/

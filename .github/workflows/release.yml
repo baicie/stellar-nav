@@ -1,13 +1,12 @@
-name: Web Release
+name: Android Release
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - 'v*.*.*'
 
 concurrency:
-  group: web-release-${{ github.ref }}
+  group: android-release-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -21,37 +20,69 @@ env:
   WASM_PACK_VERSION: 0.15.0
 
 jobs:
-  package-web:
-    name: Verify and package web app
+  verify:
+    name: Verify Android release source
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      version_code: ${{ steps.release.outputs.version_code }}
+      tag: ${{ steps.release.outputs.tag }}
+      certificate_sha256: ${{ steps.release.outputs.certificate_sha256 }}
+      is_prerelease: ${{ steps.release.outputs.is_prerelease }}
 
     steps:
-      - name: Checkout
+      - name: Checkout release tag
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
-      - name: Validate release tag
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Validate annotated tag and release metadata
+        id: release
         shell: bash
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            printf 'Release tags must use vMAJOR.MINOR.PATCH, got %s\n' "$tag" >&2
+          if [[ "$(git cat-file -t "refs/tags/${tag}")" != "tag" ]]; then
+            echo "Android releases require an annotated tag: ${tag}" >&2
             exit 1
           fi
-          package_version="$(sed -nE 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/p' pubspec.yaml | head -n 1)"
-          if [[ "$tag" != "v$package_version" ]]; then
-            printf 'Tag %s does not match pubspec version %s\n' "$tag" "$package_version" >&2
+          tag_commit="$(git rev-parse "refs/tags/${tag}^{commit}")"
+          if [[ "${tag_commit}" != "${GITHUB_SHA}" ]]; then
+            echo "Tag commit does not match the workflow source." >&2
             exit 1
           fi
-          if [[ "$(git cat-file -t "refs/tags/$tag")" != "tag" ]]; then
-            printf 'Release tag %s must be annotated\n' "$tag" >&2
-            exit 1
-          fi
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          git fetch --force --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main"
+          git merge-base --is-ancestor "${tag_commit}" origin/main
+
+          version="$(
+            python3 -m tools.release.check_release \
+              --version "${tag}" \
+              --field version
+          )"
+          version_code="$(
+            python3 -m tools.release.check_release \
+              --version "${tag}" \
+              --field version_code
+          )"
+          certificate="$(
+            python3 -m tools.release.check_release \
+              --version "${tag}" \
+              --field certificate_sha256
+          )"
+          is_prerelease="$(
+            python3 -m tools.release.check_release \
+              --version "${tag}" \
+              --field is_prerelease
+          )"
+          {
+            echo "version=${version}"
+            echo "version_code=${version_code}"
+            echo "tag=${tag}"
+            echo "certificate_sha256=${certificate}"
+            echo "is_prerelease=${is_prerelease}"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -92,10 +123,236 @@ jobs:
       - name: Run quality gates
         run: ./scripts/verify.sh
 
-      - name: Upload web release
+  android:
+    name: Build signed split Android packages
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Set up Rust Android targets
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Cache Rust Android builds
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: native
+          shared-key: android-release
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - name: Resolve Flutter dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Restore protected release keystore
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for secret_name in \
+            ANDROID_KEYSTORE_BASE64 \
+            ANDROID_KEYSTORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "Missing Android release secret: ${secret_name}" >&2
+              exit 1
+            fi
+          done
+          keystore="${RUNNER_TEMP}/astro-nav-release.jks"
+          printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > "${keystore}"
+          chmod 600 "${keystore}"
+          {
+            echo "ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_STORE_FILE=${keystore}"
+            echo "ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_STORE_PASSWORD=${ANDROID_KEYSTORE_PASSWORD}"
+            echo "ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_KEY_ALIAS=${ANDROID_KEY_ALIAS}"
+            echo "ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_KEY_PASSWORD=${ANDROID_KEY_PASSWORD}"
+            echo "ANDROID_EXPECTED_CERTIFICATE_SHA256=${{ needs.verify.outputs.certificate_sha256 }}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Build and verify signed split APKs
+        run: ./scripts/package_android_release.sh "${{ needs.verify.outputs.version }}"
+
+      - name: Attest Android APKs
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: release/android/*.apk
+
+      - name: Upload verified Android packages
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: astro-nav-web-${{ github.run_id }}
-          path: build/web/
+          name: astro-nav-android-v${{ needs.verify.outputs.version }}
+          path: release/android/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Remove protected release keystore
+        if: always()
+        shell: bash
+        run: rm -f "${RUNNER_TEMP}/astro-nav-release.jks"
+
+  publish:
+    name: Publish GitHub prerelease
+    needs: [verify, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout release notes
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Download verified Android packages
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: astro-nav-android-v${{ needs.verify.outputs.version }}
+          path: release-artifacts
+
+      - name: Verify downloaded release contract
+        shell: bash
+        working-directory: release-artifacts
+        run: |
+          set -euo pipefail
+          for asset in \
+            astro-nav-android-arm64-v8a.apk \
+            astro-nav-android-armeabi-v7a.apk \
+            astro-nav-android-x86_64.apk \
+            SHA256SUMS.txt \
+            release-metadata.json; do
+            test -s "${asset}"
+          done
+          test "$(find . -maxdepth 1 -type f | wc -l | tr -d ' ')" -eq 5
+          test "$(find . -maxdepth 1 -type f -name '*.apk' | wc -l | tr -d ' ')" -eq 3
+          sha256sum --check SHA256SUMS.txt
+
+      - name: Create or verify immutable GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+          IS_PRERELEASE: ${{ needs.verify.outputs.is_prerelease }}
+        run: |
+          set -euo pipefail
+          notes_file="docs/releases/${RELEASE_VERSION}.md"
+          test -s "${notes_file}"
+          expected_assets="$(
+            printf '%s\n' \
+              SHA256SUMS.txt \
+              astro-nav-android-arm64-v8a.apk \
+              astro-nav-android-armeabi-v7a.apk \
+              astro-nav-android-x86_64.apk \
+              release-metadata.json |
+              sort
+          )"
+          release_flags=()
+          if [[ "${IS_PRERELEASE}" == "true" ]]; then
+            release_flags+=(--prerelease)
+          fi
+
+          if gh release view "${RELEASE_TAG}" \
+            --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            existing_prerelease="$(
+              gh release view "${RELEASE_TAG}" \
+                --repo "${GITHUB_REPOSITORY}" \
+                --json isPrerelease \
+                --jq '.isPrerelease'
+            )"
+            if [[ "${existing_prerelease}" != "${IS_PRERELEASE}" ]]; then
+              echo "Existing release prerelease state is inconsistent." >&2
+              exit 1
+            fi
+
+            existing_assets_dir="$(mktemp -d "${RUNNER_TEMP}/existing-assets.XXXXXX")"
+            actual_assets="$(
+              gh release view "${RELEASE_TAG}" \
+                --repo "${GITHUB_REPOSITORY}" \
+                --json assets \
+                --jq '.assets[].name' |
+                sort
+            )"
+            if [[ -n "${actual_assets}" ]]; then
+              gh release download "${RELEASE_TAG}" \
+                --repo "${GITHUB_REPOSITORY}" \
+                --pattern '*' \
+                --dir "${existing_assets_dir}"
+            fi
+            while IFS= read -r existing_asset; do
+              [[ -n "${existing_asset}" ]] || continue
+              if [[ ! -f "release-artifacts/${existing_asset}" ]]; then
+                echo "Existing release contains an unexpected asset: ${existing_asset}" >&2
+                exit 1
+              fi
+              if ! cmp --silent \
+                "release-artifacts/${existing_asset}" \
+                "${existing_assets_dir}/${existing_asset}"; then
+                echo "Existing release asset differs: ${existing_asset}" >&2
+                exit 1
+              fi
+            done <<< "${actual_assets}"
+
+            while IFS= read -r expected_asset; do
+              if ! grep -Fqx "${expected_asset}" <<< "${actual_assets}"; then
+                gh release upload "${RELEASE_TAG}" \
+                  "release-artifacts/${expected_asset}" \
+                  --repo "${GITHUB_REPOSITORY}"
+              fi
+            done <<< "${expected_assets}"
+
+            gh release edit "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "天枢导航 ${RELEASE_TAG} · Android 内测版" \
+              --notes-file "${notes_file}" \
+              "${release_flags[@]}"
+          else
+            gh release create "${RELEASE_TAG}" release-artifacts/* \
+              --repo "${GITHUB_REPOSITORY}" \
+              --verify-tag \
+              --title "天枢导航 ${RELEASE_TAG} · Android 内测版" \
+              --notes-file "${notes_file}" \
+              "${release_flags[@]}"
+          fi
+
+          actual_assets="$(
+            gh release view "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --json assets \
+              --jq '.assets[].name' |
+              sort
+          )"
+          if [[ "${actual_assets}" != "${expected_assets}" ]]; then
+            echo "Published GitHub release assets are incomplete or unexpected." >&2
+            exit 1
+          fi
+          gh release view "${RELEASE_TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --json url,isPrerelease,assets
