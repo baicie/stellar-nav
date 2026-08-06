@@ -10,9 +10,18 @@ frb_version="${FRB_VERSION:-2.12.0}"
 frb_wasm_toolchain="${FRB_WASM_TOOLCHAIN:-nightly-2026-08-01}"
 wasm_pack_version="${WASM_PACK_VERSION:-0.15.0}"
 cleanup_paths=()
+web_pkg_backup=""
 
 cleanup() {
   local path
+
+  if [[ -n "$web_pkg_backup" && -d "$web_pkg_backup/pkg" ]]; then
+    if [[ -e "$project_root/web/pkg" ]]; then
+      find "$project_root/web/pkg" -depth -delete
+    fi
+    mv "$web_pkg_backup/pkg" "$project_root/web/pkg"
+    web_pkg_backup=""
+  fi
 
   if (( ${#cleanup_paths[@]} == 0 )); then
     return
@@ -192,7 +201,19 @@ flutter_rust_bridge_codegen build-web \
   --wasm-pack-rustup-toolchain "$frb_wasm_toolchain" \
   --release
 
-diff -ru --exclude=.gitignore web/pkg "$web_runtime_temp/pkg"
+for stable_web_asset in LICENSE package.json; do
+  cmp --silent "web/pkg/$stable_web_asset" \
+    "$web_runtime_temp/pkg/$stable_web_asset"
+done
+test -s "$web_runtime_temp/pkg/astro_engine.js"
+test -s "$web_runtime_temp/pkg/astro_engine_bg.wasm"
+
+# Wasm-bindgen embeds host-dependent disambiguators, so build the web app from
+# this runner's generated package instead of requiring cross-host byte identity.
+web_pkg_backup="$(mktemp -d "$project_root/.dart_tool/frb-web-pkg.XXXXXX")"
+cleanup_paths+=("$web_pkg_backup")
+mv "$project_root/web/pkg" "$web_pkg_backup/pkg"
+cp -R "$web_runtime_temp/pkg" "$project_root/web/pkg"
 
 step "Flutter web release build"
 flutter build web --release --no-pub

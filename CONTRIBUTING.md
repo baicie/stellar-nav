@@ -11,7 +11,7 @@ flutter pub get
 ./scripts/verify.sh
 ```
 
-`./scripts/verify.sh` 是本地与 CI 共享的权威门禁。它覆盖 Dart 格式与分析、Flutter 测试、Rust 格式 / Clippy / 测试、数据目录校验、桥接生成物与 WebAssembly 一致性、Rust 三方许可证漂移，以及 Web 构建与发行许可载荷。仓库路径包含中文时请使用脚本内的 `dart analyze`，不要把 `flutter analyze` 的 LSP 解析崩溃误判为源码问题。
+`./scripts/verify.sh` 是本地与 CI 共享的权威门禁。它覆盖 Dart 格式与分析、Flutter 测试、Rust 格式 / Clippy / 测试、数据目录校验、桥接生成物、WebAssembly 运行时契约、Rust 三方许可证漂移，以及 Web 构建与发行许可载荷。仓库路径包含中文时请使用脚本内的 `dart analyze`，不要把 `flutter analyze` 的 LSP 解析崩溃误判为源码问题。
 
 门禁会先构建当前宿主平台的 Rust 动态库，让标准 Flutter 测试实际初始化 FRB。Android release 不使用 debug 签名；需要分发原生包时，在外部受控环境配置发布密钥，不要把 `key.properties` 或密钥材料提交到仓库。
 
