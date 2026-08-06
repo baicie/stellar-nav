@@ -141,6 +141,14 @@ cargo +"$rust_toolchain" test \
 step "Rust license notice tests"
 python3 -m unittest discover -s tools/licenses/tests -v
 
+step "Android release tooling tests"
+python3 -m unittest discover -s tools/release/tests -p 'test_*.py' -v
+
+release_version="$(
+  sed -nE 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/p' pubspec.yaml
+)"
+python3 -m tools.release.check_release --version "$release_version"
+
 step "Release license consistency"
 python3 tools/licenses/generate_rust_licenses.py --check
 diff -u LICENSE native/astro_engine/LICENSE

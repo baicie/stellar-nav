@@ -168,6 +168,7 @@ native/crates/tile_decoder/           离线包 manifest 格式底层能力
 native/crates/time_engine/            霍曼目标相位与教学窗口评分
 data/                                 版本化太阳系目录
 tools/data_pipeline/                  Python 离线校验器
+tools/release/                        Android 发布元数据与工作流测试
 test/                                 Dart 单元与 Widget 测试
 integration_test/                     Flutter 集成测试
 docs/decisions/                       ADR
@@ -272,6 +273,11 @@ Rust 调用仅发生在目录加载、搜索、提交时间、修改起终点或
    - bridge / WASM 生成物无漂移；
    - `flutter build web` 成功；
    - 320 x 568、390 x 844、平板和宽屏无重叠、裁切、空白画布或控制台错误。
+7. Android beta packaging
+   - 普通 CI 使用临时证书验证 release 构建，不向 pull request 暴露正式签名材料；
+   - annotated prerelease tag 只允许指向 `main`，正式证书由 GitHub Secrets 注入；
+   - GitHub Release 只提供 `arm64-v8a`、`armeabi-v7a`、`x86_64` 三个 APK，并校验包名、版本、唯一 ABI、`libastro_engine.so`、证书与 SHA-256；
+   - 产物不可原地覆盖，撤回后使用更高 `versionCode` 和同一证书发布修复包。
 
 不以未测量的 FPS 或启动耗时冒充已达标指标。当前不可协商的性能门禁是：逐帧过程不写 Riverpod、不跨 FRB，静态与行为测试稳定，视觉检查确认地图非空且交互层不遮挡。
 

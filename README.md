@@ -104,6 +104,19 @@ python3 tools/licenses/generate_rust_licenses.py --check
 
 仓库路径包含中文时，`flutter analyze` 在当前工具版本上可能因 LSP 消息解析失败；项目门禁使用 `dart analyze`。`./scripts/verify.sh` 是提交前的权威命令，它还会构建宿主 Rust 动态库并执行真实 bridge 冒烟测试，再检查格式、目录数据、桥接生成物、WebAssembly 和 Web 构建。
 
+## Android 内测发布
+
+Android GitHub prerelease 使用 `com.baicie.astro_nav`，与旧 Expo 应用 ID 不同。CI 在普通提交中使用临时测试证书构建三个 ABI release APK；只有受保护 `main` 上的 annotated tag 才能进入正式签名工作流，签名材料仅从 GitHub Actions Secrets 注入。
+
+发布前先合并并同步 `main`，然后执行：
+
+```bash
+./scripts/release.sh 0.0.1-beta.0 --dry-run
+./scripts/release.sh 0.0.1-beta.0
+```
+
+脚本拒绝脏工作区、非 `main` 分支、未推送提交、重复标签和不一致的版本元数据；实际打标签前会再次运行 `./scripts/verify.sh`。标签触发 Android release 工作流，生成 `arm64-v8a`、`armeabi-v7a`、`x86_64` 三个独立签名 APK、SHA-256 校验文件和机器可读发布元数据，并创建 GitHub prerelease。详细安装、校验与回滚说明见 [`docs/releases/0.0.1-beta.0.md`](docs/releases/0.0.1-beta.0.md)。
+
 ## 目录
 
 ```text
@@ -113,6 +126,7 @@ native/crates/               可测试的 Rust 领域模块
 data/                        版本化太阳系目录
 tools/data_pipeline/         Python 离线目录校验工具
 tools/licenses/              Rust 三方许可证生成与审计覆盖
+tools/release/               Android 版本、签名和发布契约校验
 test/                        Dart 单元与 Widget 测试
 integration_test/            Flutter 集成测试入口
 docs/spec.md                 产品、架构与验收规格
