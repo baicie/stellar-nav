@@ -11,6 +11,6 @@
 ## 开发安全要求
 
 - 密钥只放在本地环境或 GitHub Actions secrets，不写入源码和构建产物；
-- 依赖更新由 Dependabot 提议，并通过 `pnpm verify`；
+- 依赖更新由 Dependabot 提议，并通过 `./scripts/verify.sh`；
 - 真实天文数据接入前必须记录来源、许可、版本和校验方式；
 - 不把模拟或虚构值展示为观测事实。

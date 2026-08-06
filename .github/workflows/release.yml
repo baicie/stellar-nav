@@ -1,482 +1,101 @@
-name: Android Release
+name: Web Release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: 待验证的稳定版本号，不含 v 前缀
-        required: true
-        default: 0.0.2
-        type: string
   push:
     tags:
       - 'v*.*.*'
 
 concurrency:
-  group: release-android-${{ github.ref }}
+  group: web-release-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
   contents: read
 
+env:
+  FLUTTER_VERSION: 3.44.8
+  FRB_VERSION: 2.12.0
+  FRB_WASM_TOOLCHAIN: nightly-2026-08-01
+  RUST_TOOLCHAIN: 1.96.0
+  WASM_PACK_VERSION: 0.15.0
+
 jobs:
-  verify:
-    name: Verify release source
+  package-web:
+    name: Verify and package web app
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    outputs:
-      tag: ${{ steps.release.outputs.tag }}
-      version: ${{ steps.release.outputs.version }}
+    timeout-minutes: 30
+
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
-      - name: Resolve release version
-        id: release
-        shell: bash
-        env:
-          REQUESTED_VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-            tag="${GITHUB_REF_NAME}"
-            version="${tag#v}"
-          else
-            version="${REQUESTED_VERSION}"
-            tag="v${version}"
-          fi
-
-          if [[ ! "${version}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "版本必须使用稳定的 MAJOR.MINOR.PATCH 格式。" >&2
-            exit 1
-          fi
-
-          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
-      - name: Require tagged commits to belong to main
-        if: github.event_name == 'push'
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --force --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
-
-          tag_ref="refs/tags/${GITHUB_REF_NAME}"
-          if [[ "$(git cat-file -t "${tag_ref}")" != "tag" ]]; then
-            echo "正式发布必须使用 annotated tag：${GITHUB_REF_NAME}" >&2
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            printf 'Release tags must use vMAJOR.MINOR.PATCH, got %s\n' "$tag" >&2
             exit 1
           fi
+          package_version="$(sed -nE 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/p' pubspec.yaml | head -n 1)"
+          if [[ "$tag" != "v$package_version" ]]; then
+            printf 'Tag %s does not match pubspec version %s\n' "$tag" "$package_version" >&2
+            exit 1
+          fi
+          if [[ "$(git cat-file -t "refs/tags/$tag")" != "tag" ]]; then
+            printf 'Release tag %s must be annotated\n' "$tag" >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
-          tag_commit="$(git rev-parse "${tag_ref}^{commit}")"
-          git merge-base --is-ancestor "${tag_commit}" origin/main
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          version: 10.34.3
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
-          node-version: 24
-          cache: pnpm
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy,rustfmt
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: native
 
-      - name: Verify release metadata
-        run: pnpm check:release
-        env:
-          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+      - name: Install pinned FRB web toolchain
+        shell: bash
+        run: >-
+          rustup toolchain install "${FRB_WASM_TOOLCHAIN}"
+          --profile minimal
+          --component rust-src
+          --target wasm32-unknown-unknown
+
+      - name: Install bridge build tools
+        uses: taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8 # v2.85.8
+        with:
+          tool: >-
+            flutter_rust_bridge_codegen@${{ env.FRB_VERSION }},
+            wasm-pack@${{ env.WASM_PACK_VERSION }}
+
+      - name: Resolve Flutter dependencies
+        run: flutter pub get --enforce-lockfile
 
       - name: Run quality gates
-        run: pnpm verify
+        run: ./scripts/verify.sh
 
-  android:
-    name: Build signed Android packages
-    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
-    needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      attestations: write
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
-        with:
-          version: 10.34.3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Setup Java
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Generate Android native project
-        run: pnpm exec expo prebuild --platform android --no-install --clean
-
-      - name: Configure release signing
-        run: pnpm prepare:android-release
-
-      - name: Restore release keystore
-        shell: bash
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          for secret_name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
-            if [[ -z "${!secret_name:-}" ]]; then
-              echo "缺少 Android 发布签名 secret：${secret_name}" >&2
-              exit 1
-            fi
-          done
-
-          printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > android/app/stellar-nav-release.jks
-          chmod 600 android/app/stellar-nav-release.jks
-
-      - name: Build AAB and ABI APKs
-        working-directory: android
-        env:
-          NODE_ENV: production
-          ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_STORE_FILE: stellar-nav-release.jks
-          ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ORG_GRADLE_PROJECT_STELLAR_NAV_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          ./gradlew :app:bundleRelease \
-            -PstellarNav.enableAbiSplits=false \
-            -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86_64 \
-            --no-daemon --stacktrace
-          ./gradlew :app:assembleRelease \
-            -PstellarNav.enableAbiSplits=true \
-            -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86_64 \
-            --no-daemon --stacktrace
-
-      - name: Verify signatures and package artifacts
-        shell: bash
-        env:
-          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
-        run: |
-          set -euo pipefail
-          artifact_plan="$(node scripts/print-android-release-artifacts.mjs)"
-          apksigner_path="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
-          aapt_path="$(find "${ANDROID_HOME}/build-tools" -type f -name aapt -print | sort -V | tail -n 1)"
-          test -n "${apksigner_path}"
-          test -n "${aapt_path}"
-
-          bundletool_path="${RUNNER_TEMP}/bundletool-all-1.18.3.jar"
-          curl --fail --silent --show-error --location --retry 3 \
-            https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar \
-            --output "${bundletool_path}"
-          printf '%s  %s\n' \
-            a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29 \
-            "${bundletool_path}" | sha256sum --check --status
-
-          expected_certificate="$(
-            jq -er --arg version "${RELEASE_VERSION}" \
-              '.android.releases[] | select(.version == $version) | .certificateSha256' \
-              docs/releases/manifest.json |
-              tr -d ':' |
-              tr '[:lower:]' '[:upper:]'
-          )"
-          if [[ ! "${expected_certificate}" =~ ^[0-9A-F]{64}$ ]]; then
-            echo "发布清单必须且只能提供一个 SHA-256 证书指纹。" >&2
-            exit 1
-          fi
-
-          expected_application_id="$(jq -er '.expo.android.package' app.json)"
-          expected_version_code="$(jq -er '.expo.android.versionCode' app.json)"
-          expected_version_name="$(jq -er '.expo.version' app.json)"
-
-          mkdir -p release/android
-          apk_count=0
-          aab_count=0
-          aab_path=""
-          aab_target=""
-          while IFS=$'\t' read -r artifact_kind abi source_path target_name; do
-            case "${artifact_kind}" in
-              apk)
-                apk_count=$((apk_count + 1))
-                test -f "${source_path}"
-                apk_verification="$(
-                  LC_ALL=C "${apksigner_path}" verify --verbose --print-certs-pem "${source_path}"
-                )"
-                apk_certificate="$(node scripts/extract-certificate-sha256.mjs <<< "${apk_verification}")"
-
-                if [[ ! "${apk_certificate}" =~ ^[0-9A-F]{64}$ ]]; then
-                  echo "无法从 ${abi} APK 提取唯一签名证书的 SHA-256 指纹。" >&2
-                  exit 1
-                fi
-                if [[ "${apk_certificate}" != "${expected_certificate}" ]]; then
-                  echo "${abi} APK 签名证书与发布清单不一致。" >&2
-                  exit 1
-                fi
-
-                apk_badging="$(LC_ALL=C "${aapt_path}" dump badging "${source_path}")"
-                apk_application_id="$(sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" <<< "${apk_badging}")"
-                apk_version_code="$(sed -n "s/^package: .*versionCode='\\([^']*\\)'.*/\\1/p" <<< "${apk_badging}")"
-                apk_version_name="$(sed -n "s/^package: .*versionName='\\([^']*\\)'.*/\\1/p" <<< "${apk_badging}")"
-                if [[ "${apk_application_id}" != "${expected_application_id}" ||
-                  "${apk_version_code}" != "${expected_version_code}" ||
-                  "${apk_version_name}" != "${expected_version_name}" ]]; then
-                  echo "${abi} APK manifest 与发布版本元数据不一致。" >&2
-                  printf '实际: package=%s versionCode=%s versionName=%s\n' \
-                    "${apk_application_id}" "${apk_version_code}" "${apk_version_name}" >&2
-                  exit 1
-                fi
-
-                apk_abis="$(
-                  unzip -Z1 "${source_path}" |
-                    awk -F/ '$1 == "lib" && NF >= 3 { print $2 }' |
-                    sort -u
-                )"
-                if [[ "${apk_abis}" != "${abi}" ]]; then
-                  echo "${abi} APK 必须只包含对应 ABI；实际包含：${apk_abis:-none}" >&2
-                  exit 1
-                fi
-
-                cp "${source_path}" "release/android/${target_name}"
-                ;;
-              aab)
-                aab_count=$((aab_count + 1))
-                aab_path="${source_path}"
-                aab_target="${target_name}"
-                ;;
-              *)
-                echo "未知 Android 产物类型：${artifact_kind}" >&2
-                exit 1
-                ;;
-            esac
-          done <<< "${artifact_plan}"
-
-          if [[ "${apk_count}" -ne 3 || "${aab_count}" -ne 1 ]]; then
-            echo "Android 产物计划必须包含 3 个 ABI APK 和 1 个 AAB。" >&2
-            exit 1
-          fi
-          test -f "${aab_path}"
-
-          aab_abis="$(
-            LC_ALL=C unzip -Z1 "${aab_path}" |
-              awk -F/ '$2 == "lib" && NF >= 4 { print $3 }' |
-              sort -u
-          )"
-          expected_abis="$(printf '%s\n' arm64-v8a armeabi-v7a x86_64)"
-          if [[ "${aab_abis}" != "${expected_abis}" ]]; then
-            echo "AAB 必须只包含目标 ABI：${expected_abis//$'\n'/, }；实际包含：${aab_abis:-none}" >&2
-            exit 1
-          fi
-          aab_debug_symbol_abis="$(
-            LC_ALL=C unzip -Z1 "${aab_path}" |
-              awk -F/ '$1 == "BUNDLE-METADATA" && $2 == "com.android.tools.build.debugsymbols" && NF >= 4 { print $3 }' |
-              sort -u
-          )"
-          if [[ -n "${aab_debug_symbol_abis}" && "${aab_debug_symbol_abis}" != "${expected_abis}" ]]; then
-            echo "AAB 原生调试符号必须只包含目标 ABI；实际包含：${aab_debug_symbol_abis}" >&2
-            exit 1
-          fi
-
-          aab_application_id="$(
-            java -jar "${bundletool_path}" dump manifest \
-              --bundle="${aab_path}" --xpath=/manifest/@package
-          )"
-          aab_version_code="$(
-            java -jar "${bundletool_path}" dump manifest \
-              --bundle="${aab_path}" --xpath=/manifest/@android:versionCode
-          )"
-          aab_version_name="$(
-            java -jar "${bundletool_path}" dump manifest \
-              --bundle="${aab_path}" --xpath=/manifest/@android:versionName
-          )"
-          if [[ "${aab_application_id}" != "${expected_application_id}" ||
-            "${aab_version_code}" != "${expected_version_code}" ||
-            "${aab_version_name}" != "${expected_version_name}" ]]; then
-            echo "AAB manifest 与发布版本元数据不一致。" >&2
-            printf '实际: package=%s versionCode=%s versionName=%s\n' \
-              "${aab_application_id}" "${aab_version_code}" "${aab_version_name}" >&2
-            exit 1
-          fi
-
-          if ! aab_verification="$(
-            jarsigner -J-Duser.language=en -J-Duser.country=US \
-              -verify -certs "${aab_path}" 2>&1
-          )"; then
-            echo "AAB JAR 签名验证失败。" >&2
-            printf '%s\n' "${aab_verification}" >&2
-            exit 1
-          fi
-          if grep -Fq 'This jar contains unsigned entries which have not been integrity-checked.' <<< "${aab_verification}"; then
-            echo "AAB 包含未签名条目，无法确认完整性。" >&2
-            printf '%s\n' "${aab_verification}" >&2
-            exit 1
-          fi
-          if ! grep -Fqx 'jar verified.' <<< "${aab_verification}"; then
-            echo "AAB 未通过 JAR 完整性验证。" >&2
-            printf '%s\n' "${aab_verification}" >&2
-            exit 1
-          fi
-
-          aab_entries="$(unzip -Z1 "${aab_path}")"
-          aab_signature_entry="$(
-            awk '{ name = toupper($0); if (name ~ /^META-INF\/[^\/]+\.(RSA|DSA|EC)$/) print }' \
-              <<< "${aab_entries}"
-          )"
-          if [[ -z "${aab_signature_entry}" || "${aab_signature_entry}" == *$'\n'* ]]; then
-            echo "AAB 必须且只能包含一个签名块。" >&2
-            exit 1
-          fi
-
-          aab_certificate="$(
-            unzip -p "${aab_path}" "${aab_signature_entry}" |
-              keytool -J-Duser.language=en -J-Duser.country=US -printcert -rfc |
-              node scripts/extract-certificate-sha256.mjs
-          )"
-
-          if [[ ! "${aab_certificate}" =~ ^[0-9A-F]{64}$ ]]; then
-            echo "无法从 AAB 签名块提取 leaf 证书 SHA-256 指纹。" >&2
-            exit 1
-          fi
-          if [[ "${aab_certificate}" != "${expected_certificate}" ]]; then
-            echo "AAB 签名证书与发布清单不一致。" >&2
-            exit 1
-          fi
-
-          cp "${aab_path}" "release/android/${aab_target}"
-          cd release/android
-          sha256sum ./*.apk ./*.aab > SHA256SUMS.txt
-
-      - name: Attest Android packages
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
-        with:
-          subject-path: |
-            release/android/*.apk
-            release/android/*.aab
-
-      - name: Upload Android packages
+      - name: Upload web release
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: stellar-nav-android-v${{ needs.verify.outputs.version }}
-          path: release/android/
+          name: astro-nav-web-${{ github.run_id }}
+          path: build/web/
           if-no-files-found: error
           retention-days: 30
-
-      - name: Remove restored keystore
-        if: always()
-        run: rm -f android/app/stellar-nav-release.jks
-
-  publish:
-    name: Publish GitHub release
-    if: github.event_name == 'push'
-    needs: [verify, android]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout release notes
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Download Android packages
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
-        with:
-          name: stellar-nav-android-v${{ needs.verify.outputs.version }}
-          path: release-artifacts
-
-      - name: Verify downloaded packages
-        shell: bash
-        working-directory: release-artifacts
-        env:
-          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
-        run: |
-          set -euo pipefail
-          for artifact in \
-            stellar-nav-android-arm64-v8a.apk \
-            stellar-nav-android-armeabi-v7a.apk \
-            stellar-nav-android-x86_64.apk \
-            stellar-nav-android.aab \
-            SHA256SUMS.txt; do
-            test -s "${artifact}"
-          done
-          test "$(find . -maxdepth 1 -type f | wc -l | tr -d ' ')" -eq 5
-          test "$(find . -maxdepth 1 -type f -name '*.apk' | wc -l | tr -d ' ')" -eq 3
-          test "$(find . -maxdepth 1 -type f -name '*.aab' | wc -l | tr -d ' ')" -eq 1
-          sha256sum --check SHA256SUMS.txt
-
-      - name: Create or repair GitHub release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.verify.outputs.tag }}
-          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
-        run: |
-          set -euo pipefail
-          notes_file="docs/releases/${RELEASE_VERSION}.md"
-          test -f "${notes_file}"
-
-          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            expected_assets="$(
-              printf '%s\n' \
-                SHA256SUMS.txt \
-                stellar-nav-android-arm64-v8a.apk \
-                stellar-nav-android-armeabi-v7a.apk \
-                stellar-nav-android-x86_64.apk \
-                stellar-nav-android.aab |
-                sort
-            )"
-            actual_assets="$(
-              gh release view "${RELEASE_TAG}" \
-                --json assets --jq '.assets[].name' \
-                --repo "${GITHUB_REPOSITORY}" |
-                sort
-            )"
-            if [[ "${actual_assets}" != "${expected_assets}" ]]; then
-              echo "已存在的 ${RELEASE_TAG} 资产列表与本次发布不一致，拒绝覆盖。" >&2
-              exit 1
-            fi
-
-            existing_assets_dir="$(mktemp -d "${RUNNER_TEMP}/existing-release-assets.XXXXXX")"
-            gh release download "${RELEASE_TAG}" \
-              --pattern '*' \
-              --dir "${existing_assets_dir}" \
-              --repo "${GITHUB_REPOSITORY}"
-            for artifact in release-artifacts/*; do
-              artifact_name="$(basename "${artifact}")"
-              if ! cmp --silent "${artifact}" "${existing_assets_dir}/${artifact_name}"; then
-                echo "已存在的 ${artifact_name} 与本次构建不一致，拒绝覆盖。" >&2
-                exit 1
-              fi
-            done
-
-            gh release edit "${RELEASE_TAG}" \
-              --title "缺德导航 ${RELEASE_TAG} · Android" \
-              --notes-file "${notes_file}" \
-              --repo "${GITHUB_REPOSITORY}"
-          else
-            gh release create "${RELEASE_TAG}" release-artifacts/* \
-              --verify-tag \
-              --title "缺德导航 ${RELEASE_TAG} · Android" \
-              --notes-file "${notes_file}" \
-              --repo "${GITHUB_REPOSITORY}"
-          fi

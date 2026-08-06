@@ -1,0 +1,10 @@
+{
+  "name": "astro_engine",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "astro_engine_bg.wasm",
+    "astro_engine.js"
+  ],
+  "browser": "astro_engine.js"
+}

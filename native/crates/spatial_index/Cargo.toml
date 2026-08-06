@@ -1,0 +1,11 @@
+[package]
+name = "spatial_index"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ephemeris_engine = { path = "../ephemeris_engine" }
+
+[lints]
+workspace = true

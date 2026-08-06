@@ -1,0 +1,14 @@
+[package]
+name = "route_engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+astro_core = { path = "../astro_core" }
+ephemeris_engine = { path = "../ephemeris_engine" }
+time_engine = { path = "../time_engine" }
+serde.workspace = true
+
+[lints]
+workspace = true

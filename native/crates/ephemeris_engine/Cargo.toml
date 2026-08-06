@@ -1,0 +1,12 @@
+[package]
+name = "ephemeris_engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+astro_core = { path = "../astro_core" }
+serde.workspace = true
+
+[lints]
+workspace = true

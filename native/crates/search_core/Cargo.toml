@@ -1,0 +1,11 @@
+[package]
+name = "search_core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+astro_core = { path = "../astro_core" }
+
+[lints]
+workspace = true

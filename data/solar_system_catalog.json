@@ -1,0 +1,231 @@
+{
+  "version": "2026.08-solar-mvp",
+  "sources": [
+    {
+      "id": "nasa-fact-sheets",
+      "label": "NASA NSSDC Planetary Fact Sheets",
+      "url": "https://nssdc.gsfc.nasa.gov/planetary/factsheet/",
+      "accessedAtUtc": "2026-08-05T00:00:00Z"
+    },
+    {
+      "id": "nasa-solar-system",
+      "label": "NASA Solar System Exploration",
+      "url": "https://science.nasa.gov/solar-system/",
+      "accessedAtUtc": "2026-08-05T00:00:00Z"
+    },
+    {
+      "id": "nasa-iss",
+      "label": "NASA Space Station Facts and Figures",
+      "url": "https://www.nasa.gov/international-space-station/space-station-facts-and-figures/",
+      "accessedAtUtc": "2026-08-05T00:00:00Z"
+    },
+    {
+      "id": "jpl-small-bodies",
+      "label": "JPL Small-Body Database",
+      "url": "https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html",
+      "accessedAtUtc": "2026-08-05T00:00:00Z"
+    },
+    {
+      "id": "astronav-derived-v1",
+      "label": "天枢导航科普推导模型 v1",
+      "url": "urn:astronav:derived:v1",
+      "accessedAtUtc": "2026-08-05T00:00:00Z"
+    },
+    {
+      "id": "astronav-simulation-v1",
+      "label": "天枢导航任务模拟模型 v1",
+      "url": "urn:astronav:simulation:v1",
+      "accessedAtUtc": "2026-08-05T00:00:00Z"
+    },
+    {
+      "id": "astronav-fiction-v1",
+      "label": "天枢导航虚构世界设定 v1",
+      "url": "urn:astronav:fiction:v1",
+      "accessedAtUtc": "2026-08-05T00:00:00Z"
+    }
+  ],
+  "objects": [
+    {
+      "id": "sol/sun",
+      "systemId": "sol",
+      "parentId": null,
+      "nameZh": "太阳",
+      "nameEn": "Sun",
+      "aliases": ["日", "恒星", "sun"],
+      "kind": "star",
+      "descriptionZh": "太阳系的中心恒星，承载整个系统超过 99.8% 的质量。",
+      "accentArgb": 4294945840,
+      "mapRadius": 16.0,
+      "reachable": false,
+      "statusZh": "自然天体",
+      "orbit": null,
+      "facts": [
+        {"key":"meanRadiusKm","labelZh":"平均半径","value":695700.0,"unit":"km","displayZh":"695,700 km","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"NASA 公布的平均尺度参数"}},
+        {"key":"surfaceGravityMs2","labelZh":"表面重力","value":274.0,"unit":"m/s²","displayZh":"274 m/s²","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"光球层近似值"}},
+        {"key":"rotationDays","labelZh":"赤道自转周期","value":25.38,"unit":"天","displayZh":"约 25.38 天","provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"太阳存在差异自转"}},
+        {"key":"photosphereTempC","labelZh":"光球层温度","value":5500.0,"unit":"°C","displayZh":"约 5,500 °C","provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"光球层代表温度"}},
+        {"key":"ageBillionYears","labelZh":"年龄","value":4.6,"unit":"十亿年","displayZh":"约 46 亿年","provenance":{"nature":"derived","sourceId":"nasa-solar-system","noteZh":"恒星演化模型推定"}}
+      ],
+      "provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"公开太阳科学资料快照"}
+    },
+    {
+      "id":"sol/mercury","systemId":"sol","parentId":"sol/sun","nameZh":"水星","nameEn":"Mercury","aliases":["mercury"],"kind":"planet","descriptionZh":"距离太阳最近、昼夜温差极大的岩质行星。","accentArgb":4288585374,"mapRadius":5.0,"reachable":true,"statusZh":"自然天体",
+      "orbit":{"parentId":"sol/sun","semiMajorAxisAu":0.387098,"eccentricity":0.20563,"orbitalPeriodDays":87.969,"inclinationDeg":7.005,"phaseAtJ2000Rad":3.050,"provenance":{"nature":"derived","sourceId":"astronav-derived-v1","noteZh":"公开轨道参数的 J2000 教学简化；相位为演示基准"}},
+      "facts":[
+        {"key":"meanRadiusKm","labelZh":"平均半径","value":2439.7,"unit":"km","displayZh":"2,439.7 km","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"平均半径"}},
+        {"key":"surfaceGravityMs2","labelZh":"表面重力","value":3.70,"unit":"m/s²","displayZh":"3.70 m/s²","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"表面平均值"}},
+        {"key":"orbitalPeriodDays","labelZh":"公转周期","value":87.969,"unit":"天","displayZh":"87.97 天","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"恒星年"}},
+        {"key":"rotationDays","labelZh":"自转周期","value":58.646,"unit":"天","displayZh":"58.65 天","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"恒星日"}},
+        {"key":"meanTempC","labelZh":"平均温度","value":167.0,"unit":"°C","displayZh":"约 167 °C","provenance":{"nature":"derived","sourceId":"nasa-fact-sheets","noteZh":"昼夜平均估计"}}
+      ],"provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"轨道与物理参数公开数据"}
+    },
+    {
+      "id":"sol/venus","systemId":"sol","parentId":"sol/sun","nameZh":"金星","nameEn":"Venus","aliases":["venus","启明星"],"kind":"planet","descriptionZh":"拥有高压二氧化碳大气和失控温室效应的岩质行星。","accentArgb":4293561406,"mapRadius":7.0,"reachable":true,"statusZh":"自然天体",
+      "orbit":{"parentId":"sol/sun","semiMajorAxisAu":0.723332,"eccentricity":0.006772,"orbitalPeriodDays":224.701,"inclinationDeg":3.3947,"phaseAtJ2000Rad":0.875,"provenance":{"nature":"derived","sourceId":"astronav-derived-v1","noteZh":"公开轨道参数的 J2000 教学简化；相位为演示基准"}},
+      "facts":[
+        {"key":"meanRadiusKm","labelZh":"平均半径","value":6051.8,"unit":"km","displayZh":"6,051.8 km","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"平均半径"}},
+        {"key":"surfaceGravityMs2","labelZh":"表面重力","value":8.87,"unit":"m/s²","displayZh":"8.87 m/s²","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"表面平均值"}},
+        {"key":"orbitalPeriodDays","labelZh":"公转周期","value":224.701,"unit":"天","displayZh":"224.70 天","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"恒星年"}},
+        {"key":"rotationDays","labelZh":"自转周期","value":-243.025,"unit":"天","displayZh":"243.03 天（逆行）","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"负号表示逆行自转"}},
+        {"key":"meanTempC","labelZh":"平均温度","value":464.0,"unit":"°C","displayZh":"约 464 °C","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"近地表平均值"}}
+      ],"provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"轨道与物理参数公开数据"}
+    },
+    {
+      "id":"sol/earth","systemId":"sol","parentId":"sol/sun","nameZh":"地球","nameEn":"Earth","aliases":["earth","蓝星"],"kind":"planet","descriptionZh":"已知唯一拥有稳定地表海洋和生命圈的行星。","accentArgb":4283218943,"mapRadius":8.0,"reachable":true,"statusZh":"自然天体",
+      "orbit":{"parentId":"sol/sun","semiMajorAxisAu":1.0,"eccentricity":0.0167086,"orbitalPeriodDays":365.256,"inclinationDeg":0.00005,"phaseAtJ2000Rad":1.753,"provenance":{"nature":"derived","sourceId":"astronav-derived-v1","noteZh":"公开轨道参数的 J2000 教学简化；相位为演示基准"}},
+      "facts":[
+        {"key":"meanRadiusKm","labelZh":"平均半径","value":6371.0,"unit":"km","displayZh":"6,371 km","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"平均半径"}},
+        {"key":"surfaceGravityMs2","labelZh":"标准重力","value":9.80665,"unit":"m/s²","displayZh":"9.80665 m/s²","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"标准重力常数"}},
+        {"key":"orbitalPeriodDays","labelZh":"公转周期","value":365.256,"unit":"天","displayZh":"365.256 天","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"恒星年"}},
+        {"key":"rotationDays","labelZh":"恒星日","value":0.99727,"unit":"天","displayZh":"23 小时 56 分","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"相对恒星背景"}},
+        {"key":"meanTempC","labelZh":"平均表面温度","value":15.0,"unit":"°C","displayZh":"约 15 °C","provenance":{"nature":"derived","sourceId":"nasa-fact-sheets","noteZh":"全球平均估计"}}
+      ],"provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"轨道与物理参数公开数据"}
+    },
+    {
+      "id":"sol/earth/moon","systemId":"sol","parentId":"sol/earth","nameZh":"月球","nameEn":"Moon","aliases":["moon","luna","月亮"],"kind":"moon","descriptionZh":"地球唯一的天然卫星，也是深空任务最接近的练习场。","accentArgb":4290165177,"mapRadius":5.0,"reachable":true,"statusZh":"自然天体",
+      "orbit":{"parentId":"sol/earth","semiMajorAxisAu":0.00256956,"eccentricity":0.0549,"orbitalPeriodDays":27.321661,"inclinationDeg":5.145,"phaseAtJ2000Rad":2.356,"provenance":{"nature":"derived","sourceId":"astronav-derived-v1","noteZh":"公开轨道参数的 J2000 教学简化；相位为演示基准"}},
+      "facts":[
+        {"key":"meanRadiusKm","labelZh":"平均半径","value":1737.4,"unit":"km","displayZh":"1,737.4 km","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"平均半径"}},
+        {"key":"surfaceGravityMs2","labelZh":"表面重力","value":1.62,"unit":"m/s²","displayZh":"1.62 m/s²","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"约为地球的 16.5%"}},
+        {"key":"orbitalPeriodDays","labelZh":"公转周期","value":27.321661,"unit":"天","displayZh":"27.32 天","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"恒星月"}},
+        {"key":"rotationDays","labelZh":"自转周期","value":27.321661,"unit":"天","displayZh":"27.32 天","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"潮汐锁定"}},
+        {"key":"surfaceMaxTempC","labelZh":"日照面最高温","value":127.0,"unit":"°C","displayZh":"约 127 °C","provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"赤道附近典型上限"}}
+      ],"provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"公开月球科学资料快照"}
+    },
+    {
+      "id":"sol/mars","systemId":"sol","parentId":"sol/sun","nameZh":"火星","nameEn":"Mars","aliases":["mars","红色星球"],"kind":"planet","descriptionZh":"拥有奥林帕斯山、峡谷系统与古代水活动证据的岩质行星。","accentArgb":4293426271,"mapRadius":6.5,"reachable":true,"statusZh":"重点探索目标",
+      "orbit":{"parentId":"sol/sun","semiMajorAxisAu":1.523679,"eccentricity":0.0934,"orbitalPeriodDays":686.98,"inclinationDeg":1.850,"phaseAtJ2000Rad":6.203,"provenance":{"nature":"derived","sourceId":"astronav-derived-v1","noteZh":"公开轨道参数的 J2000 教学简化；相位为演示基准"}},
+      "facts":[
+        {"key":"meanRadiusKm","labelZh":"平均半径","value":3389.5,"unit":"km","displayZh":"3,389.5 km","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"平均半径"}},
+        {"key":"surfaceGravityMs2","labelZh":"表面重力","value":3.71,"unit":"m/s²","displayZh":"3.71 m/s²","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"约为地球的 38%"}},
+        {"key":"orbitalPeriodDays","labelZh":"公转周期","value":686.98,"unit":"天","displayZh":"686.98 天","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"火星年"}},
+        {"key":"rotationDays","labelZh":"太阳日","value":1.02749,"unit":"天","displayZh":"24 小时 39 分","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"一个火星日 Sol"}},
+        {"key":"meanTempC","labelZh":"平均温度","value":-63.0,"unit":"°C","displayZh":"约 -63 °C","provenance":{"nature":"derived","sourceId":"nasa-fact-sheets","noteZh":"全球平均估计"}}
+      ],"provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"轨道与物理参数公开数据"}
+    },
+    {
+      "id":"sol/ceres","systemId":"sol","parentId":"sol/sun","nameZh":"谷神星","nameEn":"Ceres","aliases":["ceres","1 ceres"],"kind":"dwarfPlanet","descriptionZh":"小行星带中最大的天体，也是太阳系内侧唯一的矮行星。","accentArgb":4289046946,"mapRadius":4.5,"reachable":true,"statusZh":"自然天体",
+      "orbit":{"parentId":"sol/sun","semiMajorAxisAu":2.7675,"eccentricity":0.0758,"orbitalPeriodDays":1682.0,"inclinationDeg":10.594,"phaseAtJ2000Rad":1.660,"provenance":{"nature":"derived","sourceId":"astronav-derived-v1","noteZh":"公开轨道参数的 J2000 教学简化；相位为演示基准"}},
+      "facts":[
+        {"key":"meanRadiusKm","labelZh":"平均半径","value":469.7,"unit":"km","displayZh":"469.7 km","provenance":{"nature":"observed","sourceId":"jpl-small-bodies","noteZh":"等效平均半径"}},
+        {"key":"surfaceGravityMs2","labelZh":"表面重力","value":0.27,"unit":"m/s²","displayZh":"约 0.27 m/s²","provenance":{"nature":"derived","sourceId":"jpl-small-bodies","noteZh":"质量与半径推导"}},
+        {"key":"orbitalPeriodDays","labelZh":"公转周期","value":1682.0,"unit":"天","displayZh":"约 4.61 年","provenance":{"nature":"observed","sourceId":"jpl-small-bodies","noteZh":"轨道解参数"}},
+        {"key":"rotationDays","labelZh":"自转周期","value":0.3781,"unit":"天","displayZh":"约 9.07 小时","provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"光变曲线测量"}},
+        {"key":"meanTempC","labelZh":"平均温度","value":-105.0,"unit":"°C","displayZh":"约 -105 °C","provenance":{"nature":"derived","sourceId":"nasa-solar-system","noteZh":"热平衡估计"}}
+      ],"provenance":{"nature":"observed","sourceId":"jpl-small-bodies","noteZh":"小天体数据库参数快照"}
+    },
+    {
+      "id":"sol/jupiter","systemId":"sol","parentId":"sol/sun","nameZh":"木星","nameEn":"Jupiter","aliases":["jupiter"],"kind":"planet","descriptionZh":"太阳系最大的气态巨行星，拥有强磁场与庞大卫星系统。","accentArgb":4290803626,"mapRadius":11.0,"reachable":true,"statusZh":"自然天体",
+      "orbit":{"parentId":"sol/sun","semiMajorAxisAu":5.2044,"eccentricity":0.0489,"orbitalPeriodDays":4332.59,"inclinationDeg":1.303,"phaseAtJ2000Rad":0.600,"provenance":{"nature":"derived","sourceId":"astronav-derived-v1","noteZh":"公开轨道参数的 J2000 教学简化；相位为演示基准"}},
+      "facts":[
+        {"key":"meanRadiusKm","labelZh":"平均半径","value":69911.0,"unit":"km","displayZh":"69,911 km","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"平均半径"}},
+        {"key":"surfaceGravityMs2","labelZh":"云顶重力","value":24.79,"unit":"m/s²","displayZh":"24.79 m/s²","provenance":{"nature":"derived","sourceId":"nasa-fact-sheets","noteZh":"1 bar 参考层"}},
+        {"key":"orbitalPeriodDays","labelZh":"公转周期","value":4332.59,"unit":"天","displayZh":"11.86 年","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"恒星年"}},
+        {"key":"rotationDays","labelZh":"自转周期","value":0.41354,"unit":"天","displayZh":"约 9.93 小时","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"系统 III"}},
+        {"key":"cloudTempC","labelZh":"云顶温度","value":-110.0,"unit":"°C","displayZh":"约 -110 °C","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"1 bar 附近"}}
+      ],"provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"轨道与物理参数公开数据"}
+    },
+    {
+      "id":"sol/saturn","systemId":"sol","parentId":"sol/sun","nameZh":"土星","nameEn":"Saturn","aliases":["saturn"],"kind":"planet","descriptionZh":"由冰粒与岩屑构成的明亮行星环是它最醒目的标志。","accentArgb":4293769590,"mapRadius":10.0,"reachable":true,"statusZh":"自然天体",
+      "orbit":{"parentId":"sol/sun","semiMajorAxisAu":9.5826,"eccentricity":0.0565,"orbitalPeriodDays":10759.22,"inclinationDeg":2.485,"phaseAtJ2000Rad":0.872,"provenance":{"nature":"derived","sourceId":"astronav-derived-v1","noteZh":"公开轨道参数的 J2000 教学简化；相位为演示基准"}},
+      "facts":[
+        {"key":"meanRadiusKm","labelZh":"平均半径","value":58232.0,"unit":"km","displayZh":"58,232 km","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"平均半径"}},
+        {"key":"surfaceGravityMs2","labelZh":"云顶重力","value":10.44,"unit":"m/s²","displayZh":"10.44 m/s²","provenance":{"nature":"derived","sourceId":"nasa-fact-sheets","noteZh":"1 bar 参考层"}},
+        {"key":"orbitalPeriodDays","labelZh":"公转周期","value":10759.22,"unit":"天","displayZh":"29.45 年","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"恒星年"}},
+        {"key":"rotationDays","labelZh":"自转周期","value":0.44401,"unit":"天","displayZh":"约 10.66 小时","provenance":{"nature":"derived","sourceId":"nasa-fact-sheets","noteZh":"无线电与磁场模型"}},
+        {"key":"cloudTempC","labelZh":"云顶温度","value":-140.0,"unit":"°C","displayZh":"约 -140 °C","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"1 bar 附近"}}
+      ],"provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"轨道与物理参数公开数据"}
+    },
+    {
+      "id":"sol/uranus","systemId":"sol","parentId":"sol/sun","nameZh":"天王星","nameEn":"Uranus","aliases":["uranus"],"kind":"planet","descriptionZh":"自转轴几乎横躺在轨道面上的冰巨行星。","accentArgb":4285779138,"mapRadius":8.5,"reachable":true,"statusZh":"自然天体",
+      "orbit":{"parentId":"sol/sun","semiMajorAxisAu":19.2184,"eccentricity":0.0463,"orbitalPeriodDays":30688.5,"inclinationDeg":0.773,"phaseAtJ2000Rad":5.467,"provenance":{"nature":"derived","sourceId":"astronav-derived-v1","noteZh":"公开轨道参数的 J2000 教学简化；相位为演示基准"}},
+      "facts":[
+        {"key":"meanRadiusKm","labelZh":"平均半径","value":25362.0,"unit":"km","displayZh":"25,362 km","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"平均半径"}},
+        {"key":"surfaceGravityMs2","labelZh":"云顶重力","value":8.69,"unit":"m/s²","displayZh":"8.69 m/s²","provenance":{"nature":"derived","sourceId":"nasa-fact-sheets","noteZh":"1 bar 参考层"}},
+        {"key":"orbitalPeriodDays","labelZh":"公转周期","value":30688.5,"unit":"天","displayZh":"84.02 年","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"恒星年"}},
+        {"key":"rotationDays","labelZh":"自转周期","value":-0.71833,"unit":"天","displayZh":"约 17.24 小时（逆行）","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"负号表示逆行"}},
+        {"key":"cloudTempC","labelZh":"云顶温度","value":-195.0,"unit":"°C","displayZh":"约 -195 °C","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"1 bar 附近"}}
+      ],"provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"轨道与物理参数公开数据"}
+    },
+    {
+      "id":"sol/neptune","systemId":"sol","parentId":"sol/sun","nameZh":"海王星","nameEn":"Neptune","aliases":["neptune"],"kind":"planet","descriptionZh":"太阳系最外侧的主要行星，拥有极强的高层大气风。","accentArgb":4283408906,"mapRadius":8.5,"reachable":true,"statusZh":"自然天体",
+      "orbit":{"parentId":"sol/sun","semiMajorAxisAu":30.1104,"eccentricity":0.00946,"orbitalPeriodDays":60182.0,"inclinationDeg":1.770,"phaseAtJ2000Rad":5.304,"provenance":{"nature":"derived","sourceId":"astronav-derived-v1","noteZh":"公开轨道参数的 J2000 教学简化；相位为演示基准"}},
+      "facts":[
+        {"key":"meanRadiusKm","labelZh":"平均半径","value":24622.0,"unit":"km","displayZh":"24,622 km","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"平均半径"}},
+        {"key":"surfaceGravityMs2","labelZh":"云顶重力","value":11.15,"unit":"m/s²","displayZh":"11.15 m/s²","provenance":{"nature":"derived","sourceId":"nasa-fact-sheets","noteZh":"1 bar 参考层"}},
+        {"key":"orbitalPeriodDays","labelZh":"公转周期","value":60182.0,"unit":"天","displayZh":"164.8 年","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"恒星年"}},
+        {"key":"rotationDays","labelZh":"自转周期","value":0.67125,"unit":"天","displayZh":"约 16.11 小时","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"磁场参考"}},
+        {"key":"cloudTempC","labelZh":"云顶温度","value":-200.0,"unit":"°C","displayZh":"约 -200 °C","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"1 bar 附近"}}
+      ],"provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"轨道与物理参数公开数据"}
+    },
+    {
+      "id":"sol/pluto","systemId":"sol","parentId":"sol/sun","nameZh":"冥王星","nameEn":"Pluto","aliases":["pluto","134340 pluto"],"kind":"dwarfPlanet","descriptionZh":"柯伊伯带矮行星，与卡戎组成显著的双天体系统。","accentArgb":4289374890,"mapRadius":4.5,"reachable":true,"statusZh":"自然天体",
+      "orbit":{"parentId":"sol/sun","semiMajorAxisAu":39.482,"eccentricity":0.2488,"orbitalPeriodDays":90560.0,"inclinationDeg":17.16,"phaseAtJ2000Rad":0.253,"provenance":{"nature":"derived","sourceId":"astronav-derived-v1","noteZh":"公开轨道参数的 J2000 教学简化；相位为演示基准"}},
+      "facts":[
+        {"key":"meanRadiusKm","labelZh":"平均半径","value":1188.3,"unit":"km","displayZh":"1,188.3 km","provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"新视野号测量约束"}},
+        {"key":"surfaceGravityMs2","labelZh":"表面重力","value":0.62,"unit":"m/s²","displayZh":"约 0.62 m/s²","provenance":{"nature":"derived","sourceId":"nasa-fact-sheets","noteZh":"质量与半径推导"}},
+        {"key":"orbitalPeriodDays","labelZh":"公转周期","value":90560.0,"unit":"天","displayZh":"约 248 年","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"轨道解参数"}},
+        {"key":"rotationDays","labelZh":"自转周期","value":-6.387,"unit":"天","displayZh":"6.387 天（逆行）","provenance":{"nature":"observed","sourceId":"nasa-fact-sheets","noteZh":"与卡戎潮汐锁定"}},
+        {"key":"meanTempC","labelZh":"平均温度","value":-225.0,"unit":"°C","displayZh":"约 -225 °C","provenance":{"nature":"derived","sourceId":"nasa-solar-system","noteZh":"表面温度典型值"}}
+      ],"provenance":{"nature":"observed","sourceId":"nasa-solar-system","noteZh":"公开冥王星科学资料快照"}
+    },
+    {
+      "id":"sol/earth/iss","systemId":"sol","parentId":"sol/earth","nameZh":"国际空间站","nameEn":"International Space Station","aliases":["iss","国际空间站","低地球轨道站"],"kind":"orbitalStation","descriptionZh":"运行在低地球轨道的载人科研平台；本 App 使用静态教学轨道，不代表实时 TLE。","accentArgb":4293980400,"mapRadius":4.5,"reachable":true,"statusZh":"教学轨道快照",
+      "orbit":{"parentId":"sol/earth","semiMajorAxisAu":0.00004540,"eccentricity":0.0006,"orbitalPeriodDays":0.06451,"inclinationDeg":51.64,"phaseAtJ2000Rad":0.300,"provenance":{"nature":"derived","sourceId":"astronav-derived-v1","noteZh":"NASA ISS 参数换算为静态教学轨道；相位不是实时 TLE"}},
+      "facts":[
+        {"key":"nominalAltitudeKm","labelZh":"典型轨道高度","value":420.0,"unit":"km","displayZh":"约 420 km","provenance":{"nature":"derived","sourceId":"nasa-iss","noteZh":"实际高度随再推进变化"}},
+        {"key":"orbitalPeriodMinutes","labelZh":"绕地周期","value":92.9,"unit":"分钟","displayZh":"约 92.9 分钟","provenance":{"nature":"derived","sourceId":"nasa-iss","noteZh":"典型低轨周期"}},
+        {"key":"inclinationDeg","labelZh":"轨道倾角","value":51.64,"unit":"°","displayZh":"51.64°","provenance":{"nature":"observed","sourceId":"nasa-iss","noteZh":"名义轨道倾角"}},
+        {"key":"crewCapacity","labelZh":"长期乘员规模","value":7.0,"unit":"人","displayZh":"通常最多 7 人","provenance":{"nature":"observed","sourceId":"nasa-iss","noteZh":"取决于轮换任务"}},
+        {"key":"speedKms","labelZh":"典型轨道速度","value":7.66,"unit":"km/s","displayZh":"约 7.66 km/s","provenance":{"nature":"derived","sourceId":"nasa-iss","noteZh":"按典型高度推导"}}
+      ],"provenance":{"nature":"derived","sourceId":"nasa-iss","noteZh":"静态教学轨道；不是实时位置"}
+    },
+    {
+      "id":"sol/earth/moon/artemis-base","systemId":"sol","parentId":"sol/earth/moon","nameZh":"阿尔忒弥斯月面基地","nameEn":"Artemis Lunar Base","aliases":["月球基地","artemis base","月面基地"],"kind":"surfaceBase","descriptionZh":"用于演示月面抵达与补给任务的虚构科研基地。","accentArgb":4283929720,"mapRadius":4.5,"reachable":true,"statusZh":"虚构设施",
+      "orbit":null,
+      "facts":[
+        {"key":"crewCapacity","labelZh":"设定乘员容量","value":24.0,"unit":"人","displayZh":"24 人","provenance":{"nature":"fictional","sourceId":"astronav-fiction-v1","noteZh":"产品世界观设定"}},
+        {"key":"powerKw","labelZh":"设定持续功率","value":480.0,"unit":"kW","displayZh":"480 kW","provenance":{"nature":"fictional","sourceId":"astronav-fiction-v1","noteZh":"产品世界观设定"}},
+        {"key":"landingPads","labelZh":"设定着陆坪","value":3.0,"unit":"座","displayZh":"3 座","provenance":{"nature":"fictional","sourceId":"astronav-fiction-v1","noteZh":"产品世界观设定"}}
+      ],"provenance":{"nature":"fictional","sourceId":"astronav-fiction-v1","noteZh":"并非现实已运营基地"}
+    },
+    {
+      "id":"sol/mars/morning-star-port","systemId":"sol","parentId":"sol/mars","nameZh":"晨星火星港","nameEn":"Morning Star Mars Port","aliases":["火星基地","mars port","晨星港"],"kind":"surfaceBase","descriptionZh":"用于演示火星窗口、着陆和表面接驳的虚构港站。","accentArgb":4293828345,"mapRadius":4.5,"reachable":true,"statusZh":"虚构设施",
+      "orbit":null,
+      "facts":[
+        {"key":"crewCapacity","labelZh":"设定乘员容量","value":96.0,"unit":"人","displayZh":"96 人","provenance":{"nature":"fictional","sourceId":"astronav-fiction-v1","noteZh":"产品世界观设定"}},
+        {"key":"powerMw","labelZh":"设定持续功率","value":8.4,"unit":"MW","displayZh":"8.4 MW","provenance":{"nature":"fictional","sourceId":"astronav-fiction-v1","noteZh":"产品世界观设定"}},
+        {"key":"landingPads","labelZh":"设定着陆坪","value":6.0,"unit":"座","displayZh":"6 座","provenance":{"nature":"fictional","sourceId":"astronav-fiction-v1","noteZh":"产品世界观设定"}}
+      ],"provenance":{"nature":"fictional","sourceId":"astronav-fiction-v1","noteZh":"并非现实已运营基地"}
+    },
+    {
+      "id":"sol/earth-moon-l1/relay","systemId":"sol","parentId":"sol/earth","nameZh":"地月 L1 中继站","nameEn":"Earth-Moon L1 Relay","aliases":["l1 中继","通信中继站","relay"],"kind":"relay","descriptionZh":"用于演示通信稳定性与分段航路的虚构地月中继节点。","accentArgb":4286242274,"mapRadius":4.0,"reachable":true,"statusZh":"虚构设施",
+      "orbit":{"parentId":"sol/earth","semiMajorAxisAu":0.00218,"eccentricity":0.01,"orbitalPeriodDays":27.321661,"inclinationDeg":5.145,"phaseAtJ2000Rad":2.100,"provenance":{"nature":"fictional","sourceId":"astronav-fiction-v1","noteZh":"虚构中继站的演示轨道设定；不代表现实设施"}},
+      "facts":[
+        {"key":"relayChannels","labelZh":"设定中继通道","value":16.0,"unit":"路","displayZh":"16 路","provenance":{"nature":"fictional","sourceId":"astronav-fiction-v1","noteZh":"产品世界观设定"}},
+        {"key":"latencyOverheadMs","labelZh":"设定处理开销","value":18.0,"unit":"ms","displayZh":"18 ms","provenance":{"nature":"fictional","sourceId":"astronav-fiction-v1","noteZh":"不含光行时"}},
+        {"key":"powerKw","labelZh":"设定功率","value":220.0,"unit":"kW","displayZh":"220 kW","provenance":{"nature":"fictional","sourceId":"astronav-fiction-v1","noteZh":"产品世界观设定"}}
+      ],"provenance":{"nature":"fictional","sourceId":"astronav-fiction-v1","noteZh":"并非现实已部署中继站"}
+    }
+  ]
+}
