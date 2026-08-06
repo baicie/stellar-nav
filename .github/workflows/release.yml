@@ -168,13 +168,14 @@ jobs:
       - name: Resolve Flutter dependencies
         run: flutter pub get --enforce-lockfile
 
-      - name: Restore protected release keystore
+      - name: Build and verify signed split APKs
         shell: bash
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_EXPECTED_CERTIFICATE_SHA256: ${{ needs.verify.outputs.certificate_sha256 }}
         run: |
           set -euo pipefail
           for secret_name in \
@@ -188,22 +189,14 @@ jobs:
             fi
           done
           keystore="${RUNNER_TEMP}/astro-nav-release.jks"
+          trap 'rm -f "${keystore}"' EXIT
           printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > "${keystore}"
           chmod 600 "${keystore}"
-
-      - name: Build and verify signed split APKs
-        env:
-          ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_STORE_FILE: ${{ runner.temp }}/astro-nav-release.jks
-          ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_EXPECTED_CERTIFICATE_SHA256: ${{ needs.verify.outputs.certificate_sha256 }}
-        run: ./scripts/package_android_release.sh "${{ needs.verify.outputs.version }}"
-
-      - name: Remove protected release keystore
-        if: always()
-        shell: bash
-        run: rm -f "${RUNNER_TEMP}/astro-nav-release.jks"
+          export ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_STORE_FILE="${keystore}"
+          export ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_STORE_PASSWORD="${ANDROID_KEYSTORE_PASSWORD}"
+          export ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_KEY_ALIAS="${ANDROID_KEY_ALIAS}"
+          export ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_KEY_PASSWORD="${ANDROID_KEY_PASSWORD}"
+          ./scripts/package_android_release.sh "${{ needs.verify.outputs.version }}"
 
       - name: Attest Android APKs
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
@@ -274,6 +267,27 @@ jobs:
             exit 1
           fi
 
+          verify_remote_release_tag() {
+            local remote_ref="refs/release-verification/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            if ! git fetch --force --no-tags origin \
+              "+refs/tags/${RELEASE_TAG}:${remote_ref}"; then
+              echo "Unable to fetch the release tag from origin." >&2
+              exit 1
+            fi
+            if [[ "$(git cat-file -t "${remote_ref}")" != "tag" ]]; then
+              echo "Release tag is not annotated." >&2
+              git update-ref -d "${remote_ref}"
+              exit 1
+            fi
+            remote_commit="$(git rev-parse "${remote_ref}^{commit}")"
+            git update-ref -d "${remote_ref}"
+            if [[ "${remote_commit}" != "${GITHUB_SHA}" ]]; then
+              echo "Remote release tag no longer points at the workflow commit." >&2
+              exit 1
+            fi
+          }
+          verify_remote_release_tag
+
           expected_assets="$(
             printf '%s\n' \
               SHA256SUMS.txt \
@@ -286,15 +300,16 @@ jobs:
           expected_title="天枢导航 ${RELEASE_TAG} · Android 内测版"
           expected_body="$(cat "${notes_file}")"
           release_flags=(--prerelease="${IS_PRERELEASE}")
-          release_api="repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}"
           release_json_file="$(mktemp "${RUNNER_TEMP}/release.XXXXXX.json")"
           release_error_file="$(mktemp "${RUNNER_TEMP}/release.XXXXXX.error")"
           release_exists=false
 
-          if gh api "${release_api}" \
+          if gh release view "${RELEASE_TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --json assets,body,isDraft,isImmutable,isPrerelease,name,url \
             > "${release_json_file}" 2> "${release_error_file}"; then
             release_exists=true
-          elif grep -Fq '(HTTP 404)' "${release_error_file}"; then
+          elif grep -Fqx 'release not found' "${release_error_file}"; then
             release_exists=false
           else
             cat "${release_error_file}" >&2
@@ -303,9 +318,9 @@ jobs:
           fi
 
           if [[ "${release_exists}" == "true" ]]; then
-            existing_is_draft="$(jq -r '.draft' "${release_json_file}")"
-            existing_is_immutable="$(jq -r '.immutable' "${release_json_file}")"
-            existing_is_prerelease="$(jq -r '.prerelease' "${release_json_file}")"
+            existing_is_draft="$(jq -r '.isDraft' "${release_json_file}")"
+            existing_is_immutable="$(jq -r '.isImmutable' "${release_json_file}")"
+            existing_is_prerelease="$(jq -r '.isPrerelease' "${release_json_file}")"
             actual_assets="$(
               jq -r '.assets[].name' "${release_json_file}" |
                 sort
@@ -390,6 +405,7 @@ jobs:
               fi
             done <<< "${expected_assets}"
 
+            verify_remote_release_tag
             gh release edit "${RELEASE_TAG}" \
               --repo "${GITHUB_REPOSITORY}" \
               --title "${expected_title}" \
@@ -400,6 +416,8 @@ jobs:
             echo "Existing immutable release assets are incomplete or unexpected." >&2
             exit 1
           fi
+
+          verify_remote_release_tag
 
           final_release_json="$(
             gh release view "${RELEASE_TAG}" \
