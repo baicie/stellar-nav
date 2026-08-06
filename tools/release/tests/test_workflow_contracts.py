@@ -45,13 +45,17 @@ class WorkflowContractTests(unittest.TestCase):
             "--json assets,body,isDraft,isImmutable,isPrerelease,name,url",
             workflow,
         )
+        self.assertNotIn("releases/tags/${RELEASE_TAG}", workflow)
+        self.assertIn("grep -Fqx 'release not found'", workflow)
         self.assertIn("Existing published release state is inconsistent.", workflow)
         self.assertIn("Unable to determine whether the release exists.", workflow)
+        self.assertIn("verify_remote_release_tag()", workflow)
+        self.assertIn("refs/release-verification/", workflow)
+        self.assertIn('"${GITHUB_SHA}"', workflow)
+        self.assertGreaterEqual(workflow.count("verify_remote_release_tag"), 3)
+        self.assertIn("trap 'rm -f", workflow)
         self.assertIn("overwrite: true", workflow)
-        self.assertLess(
-            workflow.index("Remove protected release keystore"),
-            workflow.index("Attest Android APKs"),
-        )
+        self.assertNotIn("Restore protected release keystore", workflow)
 
         for asset_name in (
             "astro-nav-android-arm64-v8a.apk",
