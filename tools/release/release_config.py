@@ -26,6 +26,12 @@ PUBSPEC_VERSION_PATTERN = re.compile(
 APPLICATION_ID_PATTERN = re.compile(r'applicationId\s*=\s*"([A-Za-z0-9_.]+)"')
 
 ANDROID_ABIS = ("arm64-v8a", "armeabi-v7a", "x86_64")
+# Mirrors FlutterPluginConstants.ABI_VERSION for --split-per-abi builds.
+ANDROID_ABI_VERSION_PREFIXES = {
+    "arm64-v8a": 2,
+    "armeabi-v7a": 1,
+    "x86_64": 4,
+}
 ANDROID_ASSET_NAMES = tuple(
     f"astro-nav-android-{abi}.apk" for abi in ANDROID_ABIS
 ) + ("SHA256SUMS.txt", "release-metadata.json")
@@ -54,6 +60,13 @@ class ReleaseConfig:
     @property
     def asset_names(self) -> tuple[str, ...]:
         return ANDROID_ASSET_NAMES
+
+    def split_version_code(self, abi: str) -> int:
+        try:
+            prefix = ANDROID_ABI_VERSION_PREFIXES[abi]
+        except KeyError as error:
+            raise ReleaseConfigError(f"Unsupported Android ABI: {abi}") from error
+        return prefix * 1000 + self.version_code
 
 
 def normalize_version(value: str) -> str:
@@ -169,6 +182,7 @@ def render_release_metadata(
             {
                 "abi": abi,
                 "file": path.name,
+                "versionCode": config.split_version_code(abi),
                 "sha256": _sha256(path),
                 "sizeBytes": path.stat().st_size,
             }

@@ -164,12 +164,21 @@ for abi in "${abis[@]}"; do
   apk_version_name="$(
     sed -n "s/^package: .*versionName='\([^']*\)'.*/\1/p" <<<"$badging"
   )"
+  expected_apk_version_code="$(
+    python3 -m tools.release.check_release \
+      --project-root "$project_root" \
+      --version "$version" \
+      --field split_version_code \
+      --abi "$abi"
+  )"
   if [[ "$application_id" != "$expected_application_id" || \
-    "$apk_version_code" != "$version_code" || \
+    "$apk_version_code" != "$expected_apk_version_code" || \
     "$apk_version_name" != "$version" ]]; then
     printf '%s APK metadata mismatch.\n' "$abi" >&2
     printf 'actual: package=%s versionCode=%s versionName=%s\n' \
       "$application_id" "$apk_version_code" "$apk_version_name" >&2
+    printf 'expected: package=%s versionCode=%s versionName=%s\n' \
+      "$expected_application_id" "$expected_apk_version_code" "$version" >&2
     exit 1
   fi
 

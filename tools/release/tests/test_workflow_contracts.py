@@ -38,7 +38,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("outputs.certificate_sha256", workflow)
         self.assertNotIn("outputs.certificate-sha256", workflow)
         self.assertNotIn('>> "${GITHUB_ENV}"', workflow)
-        self.assertIn("repos/${GITHUB_REPOSITORY}/immutable-releases", workflow)
+        self.assertNotIn("/immutable-releases", workflow)
         self.assertIn("--draft", workflow)
         self.assertIn("--draft=false", workflow)
         self.assertIn(
@@ -77,6 +77,7 @@ class WorkflowContractTests(unittest.TestCase):
             "sha256sum",
             "ANDROID_EXPECTED_CERTIFICATE_SHA256",
             "libastro_engine.so",
+            "--field split_version_code",
         ):
             self.assertIn(required_command, script)
         self.assertIn("tr '[:lower:]' '[:upper:]'", script)

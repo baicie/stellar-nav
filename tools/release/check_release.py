@@ -5,7 +5,11 @@ import json
 import sys
 from pathlib import Path
 
-from tools.release.release_config import ReleaseConfigError, load_release_config
+from tools.release.release_config import (
+    ANDROID_ABIS,
+    ReleaseConfigError,
+    load_release_config,
+)
 
 
 FIELDS = {
@@ -23,7 +27,8 @@ def parse_args(arguments: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate Android release metadata.")
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
     parser.add_argument("--version", required=True)
-    parser.add_argument("--field", choices=tuple(FIELDS))
+    parser.add_argument("--field", choices=(*FIELDS, "split_version_code"))
+    parser.add_argument("--abi", choices=ANDROID_ABIS)
     return parser.parse_args(arguments)
 
 
@@ -35,7 +40,15 @@ def main(arguments: list[str] | None = None) -> int:
         print(error, file=sys.stderr)
         return 1
 
-    if options.field:
+    if options.field == "split_version_code":
+        if options.abi is None:
+            print("--abi is required with --field split_version_code", file=sys.stderr)
+            return 1
+        print(config.split_version_code(options.abi))
+    elif options.abi is not None:
+        print("--abi is only valid with --field split_version_code", file=sys.stderr)
+        return 1
+    elif options.field:
         print(FIELDS[options.field](config))
     else:
         print(

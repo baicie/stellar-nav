@@ -115,7 +115,7 @@ Android GitHub prerelease 使用 `com.baicie.astro_nav`，与旧 Expo 应用 ID 
 ./scripts/release.sh 0.0.1-beta.0
 ```
 
-脚本拒绝脏工作区、非 `main` 分支、未推送提交、重复标签和不一致的版本元数据；实际打标签前会再次运行 `./scripts/verify.sh`。标签触发 Android release 工作流，生成 `arm64-v8a`、`armeabi-v7a`、`x86_64` 三个独立签名 APK、SHA-256 校验文件和机器可读发布元数据，并创建 GitHub prerelease。仓库已启用 GitHub Release immutability，并用规则集保护 `v*` 标签，工作流会在上传前检查这些约束、重新核验 tag commit，并在发布后验证 Release 已锁定。详细安装、校验与回滚说明见 [`docs/releases/0.0.1-beta.0.md`](docs/releases/0.0.1-beta.0.md)。
+脚本拒绝脏工作区、非 `main` 分支、未推送提交、重复标签和不一致的版本元数据；实际打标签前会再次运行 `./scripts/verify.sh`。标签触发 Android release 工作流，生成 `arm64-v8a`、`armeabi-v7a`、`x86_64` 三个独立签名 APK、SHA-256 校验文件和机器可读发布元数据，并创建 GitHub prerelease。仓库已由管理员启用 GitHub Release immutability，并用规则集保护 `v*` 标签；工作流会在上传前重新核验 tag commit，并在发布后以 Release 的 `isImmutable` 状态确认资产已经锁定。详细安装、校验与回滚说明见 [`docs/releases/0.0.1-beta.0.md`](docs/releases/0.0.1-beta.0.md)。
 
 ## 目录
 

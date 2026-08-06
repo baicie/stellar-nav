@@ -4,11 +4,13 @@ import unittest
 from pathlib import Path
 
 from tools.release.release_config import (
+    ANDROID_ABIS,
     ReleaseConfigError,
     extract_single_certificate_sha256,
     load_release_config,
     normalize_certificate_sha256,
     normalize_version,
+    render_release_metadata,
 )
 
 
@@ -86,6 +88,37 @@ class ReleaseConfigTests(unittest.TestCase):
                     "SHA256SUMS.txt",
                     "release-metadata.json",
                 ),
+            )
+
+    def test_derives_flutter_abi_split_version_codes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            self._write_fixture(root)
+            config = load_release_config(root, "0.0.1-beta.0")
+
+            self.assertEqual(config.split_version_code("armeabi-v7a"), 1001)
+            self.assertEqual(config.split_version_code("arm64-v8a"), 2001)
+            self.assertEqual(config.split_version_code("x86_64"), 4001)
+            with self.assertRaisesRegex(ReleaseConfigError, "Unsupported Android ABI"):
+                config.split_version_code("x86")
+
+    def test_release_metadata_records_split_version_codes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            self._write_fixture(root)
+            config = load_release_config(root, "0.0.1-beta.0")
+            artifacts = {}
+            for abi in ANDROID_ABIS:
+                artifact = root / f"{abi}.apk"
+                artifact.write_bytes(f"{abi}\n".encode("ascii"))
+                artifacts[abi] = artifact
+
+            metadata = json.loads(render_release_metadata(config, artifacts))
+
+            self.assertEqual(metadata["versionCode"], 1)
+            self.assertEqual(
+                [entry["versionCode"] for entry in metadata["artifacts"]],
+                [2001, 1001, 4001],
             )
 
     def test_rejects_mismatched_version_build_number_and_application_id(self) -> None:
