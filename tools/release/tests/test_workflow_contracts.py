@@ -6,6 +6,18 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class WorkflowContractTests(unittest.TestCase):
+    def test_workflows_use_node_24_checkout(self) -> None:
+        checkout = (
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 "
+            "# v7.0.1"
+        )
+        for workflow_name in ("ci.yml", "release.yml"):
+            workflow = (
+                PROJECT_ROOT / ".github/workflows" / workflow_name
+            ).read_text(encoding="utf-8")
+            self.assertIn(checkout, workflow)
+            self.assertNotIn("actions/checkout@11d5960a", workflow)
+
     def test_ci_builds_split_release_packages_with_an_ephemeral_key(self) -> None:
         workflow = (PROJECT_ROOT / ".github/workflows/ci.yml").read_text(
             encoding="utf-8"
