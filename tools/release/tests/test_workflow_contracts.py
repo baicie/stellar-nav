@@ -6,7 +6,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class WorkflowContractTests(unittest.TestCase):
-    def test_workflows_use_node_24_checkout(self) -> None:
+    def test_workflows_use_node_24_github_actions(self) -> None:
         checkout = (
             "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 "
             "# v7.0.1"
@@ -17,6 +17,27 @@ class WorkflowContractTests(unittest.TestCase):
             ).read_text(encoding="utf-8")
             self.assertIn(checkout, workflow)
             self.assertNotIn("actions/checkout@11d5960a", workflow)
+
+        ci_workflow = (PROJECT_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+        release_workflow = (
+            PROJECT_ROOT / ".github/workflows/release.yml"
+        ).read_text(encoding="utf-8")
+        upload = (
+            "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a "
+            "# v7.0.1"
+        )
+        download = (
+            "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c "
+            "# v8.0.1"
+        )
+        self.assertIn(upload, ci_workflow)
+        self.assertIn(upload, release_workflow)
+        self.assertIn(download, release_workflow)
+        self.assertNotIn("actions/upload-artifact@ea165f8d", ci_workflow)
+        self.assertNotIn("actions/upload-artifact@ea165f8d", release_workflow)
+        self.assertNotIn("actions/download-artifact@634f93cb", release_workflow)
 
     def test_ci_builds_split_release_packages_with_an_ephemeral_key(self) -> None:
         workflow = (PROJECT_ROOT / ".github/workflows/ci.yml").read_text(
