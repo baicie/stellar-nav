@@ -113,8 +113,7 @@ flutter build apk \
   --release \
   --split-per-abi \
   --build-name "$version" \
-  --build-number "$version_code" \
-  --no-pub
+  --build-number "$version_code"
 
 output_dir="${RELEASE_OUTPUT_DIR:-$project_root/release/android}"
 mkdir -p "$output_dir"

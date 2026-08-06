@@ -83,6 +83,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("${provided_certificate^^}", script)
         self.assertNotIn("app-release.apk", script)
         self.assertNotIn("debug.keystore", script)
+        self.assertNotIn("--no-pub", script)
 
     def test_cargokit_uses_gradle_nine_exec_operations(self) -> None:
         plugin = (PROJECT_ROOT / "rust_builder/cargokit/gradle/plugin.gradle").read_text(
