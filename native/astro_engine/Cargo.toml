@@ -1,0 +1,23 @@
+[package]
+name = "astro_engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+astro_core = { path = "../crates/astro_core" }
+ephemeris_engine = { path = "../crates/ephemeris_engine" }
+flutter_rust_bridge = "=2.12.0"
+route_engine = { path = "../crates/route_engine" }
+search_core = { path = "../crates/search_core" }
+serde.workspace = true
+serde_json.workspace = true
+spatial_index = { path = "../crates/spatial_index" }
+tile_decoder = { path = "../crates/tile_decoder" }
+time_engine = { path = "../crates/time_engine" }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

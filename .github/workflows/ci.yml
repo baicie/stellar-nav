@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -12,58 +13,58 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  FLUTTER_VERSION: 3.44.8
+  FRB_VERSION: 2.12.0
+  FRB_WASM_TOOLCHAIN: nightly-2026-08-01
+  RUST_TOOLCHAIN: 1.96.0
+  WASM_PACK_VERSION: 0.15.0
+
 jobs:
   verify:
-    name: Verify Expo app
+    name: Verify Flutter and Rust app
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          version: 10.34.3
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
-          node-version: 24
-          cache: pnpm
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy,rustfmt
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: native
 
-      - name: Format check
-        run: pnpm format:check
+      - name: Install pinned FRB web toolchain
+        shell: bash
+        run: >-
+          rustup toolchain install "${FRB_WASM_TOOLCHAIN}"
+          --profile minimal
+          --component rust-src
+          --target wasm32-unknown-unknown
 
-      - name: Lint
-        run: pnpm lint
+      - name: Install bridge build tools
+        uses: taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8 # v2.85.8
+        with:
+          tool: >-
+            flutter_rust_bridge_codegen@${{ env.FRB_VERSION }},
+            wasm-pack@${{ env.WASM_PACK_VERSION }}
 
-      - name: Type check
-        run: pnpm typecheck
+      - name: Resolve Flutter dependencies
+        run: flutter pub get --enforce-lockfile
 
-      - name: Core dependency boundary
-        run: pnpm check:boundaries
-
-      - name: Release metadata
-        run: pnpm check:release
-
-      - name: Tests and coverage
-        run: pnpm test:coverage
-
-      - name: Production dependency audit
-        run: pnpm audit
-
-      - name: Expo Doctor
-        run: pnpm doctor
-
-      - name: Android bundle export
-        run: pnpm build:android-bundle
-
-      - name: Web export
-        run: pnpm build:web
-
-      - name: Compressed bundle budget
-        run: pnpm check:bundle
+      - name: Run quality gates
+        run: ./scripts/verify.sh

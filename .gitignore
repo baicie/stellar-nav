@@ -1,44 +1,55 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.swp
 
-# dependencies
-node_modules/
+# Logs and local environment
+*.log
+.env
+.env.*
+!.env.example
 
-# Expo
-.expo/
-dist/
-web-build/
-coverage/
-expo-env.d.ts
-public/canvaskit.wasm
-
-# Native
-.kotlin/
-*.orig.*
+# Credentials and signing material
 *.jks
-*.p8
-*.p12
 *.key
 *.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
+*.p12
+*.p8
 *.pem
 
-# local env files
-.env*.local
-.release/
+# Flutter, Dart, and native build output
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub/
+.pub-cache/
+**/doc/api/
+**/ios/Flutter/.last_build_id
+**/build/
+/coverage/
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+app.*.map.json
+app.*.symbols
 
-# typescript
-*.tsbuildinfo
+# Rust build output
+/native/target/
+/native/astro_engine/Cargo.lock
 
-# generated native folders
-/ios
-/android
+# FRB verification and intermediate web output
+/native/astro_engine/src/frb_verify.*/
+/native/astro_engine/web/pkg/
+/native/astro_engine/.dart_tool/
+
+# Python data tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# The runtime bridge under web/pkg is intentionally committed.

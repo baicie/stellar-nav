@@ -1,103 +1,129 @@
-# 缺德导航
+# 天枢导航 AstroNav
 
-一个高性能、带点坏笑的星际导航模拟器。它把真实天文对象、确定性的演示航线和 GPU 星图放在同一块屏幕里，适合拿来图一乐，不是航天飞行控制软件。
+天枢导航是一款地图式太阳系科普 App：用用户熟悉的搜索、地图、路线比较、图层和时间轴交互，解释行星运动、转移窗口、通信时延与任务取舍；视觉表达偏科幻，数据口径保持克制。
 
-## 当前目标
+> 当前路线、天体位置和风险指标都是教学模型输出，不可用于真实航天任务设计、飞行控制或安全决策。
 
-首版 MVP 直接进入 2.5D 星图，支持：
+## 当前 MVP
 
-- 从地球选择仙女座星系、比邻星、天狼星或 TRAPPIST-1；
-- 比较推荐、最快、避开黑洞三条演示航线；
-- 查看距离、预计耗时、燃料、风险和数据性质；
-- 启动/结束航行，观察飞船沿航线推进；
-- 在手机和 Web 预览中保持可访问、可读和不依赖后端。
+应用打开后直接进入太阳系导航地图，当前实现包括：
 
-第一版明确不做账号、在线天文 API、完整 Gaia 数据、真实轨道积分、支付和遥测。
+- “航线 / 太阳系”两种地图视图，以及平移、缩放、重置和对象点选；
+- 中英文名称与别名搜索，天体和设施详情，以及字段级来源与数据性质标识；
+- “最快到达 / 最省燃料 / 最低风险”三种确定性教学航线；
+- 航时、距离、Delta-v、通信时延、风险、教学转移窗口和途经节点展示；
+- 可回退、快进或返回现实时间的时间轴，松开滑块后重新计算位置与航线；
+- 天体、轨道、航线、设施、通信、空间天气和风险图层；
+- 带路线动画与阶段提示的模拟导航 HUD；
+- 手机底部面板与宽屏左侧导航坞，以及中文无障碍名称。
 
-## 技术栈
+内置目录当前包含 16 个对象：太阳、八大行星、月球、谷神星、冥王星、国际空间站教学轨道，以及 3 个明确标注为虚构的任务设施。太阳系是当前唯一可运行的数据域；`systemId` 和 `parentId` 已进入数据模型，为将来增加其他恒星系统和更大尺度的层级导航保留稳定边界。
 
-- Expo SDK 57.0.10、React Native 0.86.2、React 19、TypeScript 6；
-- React Native Skia 绘制星场、银河带、航线和飞船；
-- Reanimated shared values 驱动连续动画；
-- Zustand 管理低频导航状态；
-- Jest、jest-expo 和 React Native Testing Library 做领域与交互测试；
-- pnpm 10 管理依赖。
+以下能力尚未实现：实时 SPICE/JPL Horizons 星历、真实航天器遥测、Lambert 或多体高精度求解、完整 3D 视图、在线账号与后端、离线包下载管理。Rust 中的空间筛选与离线包清单解码目前是底层能力，不等于对应产品功能已经接通。
 
-核心领域代码位于 `src/core`，不依赖 React、React Native、Expo、Skia 或 Zustand，可单独测试且结果确定。
+## 数据性质
 
-## 开始使用
+每个对象、轨道参数组和科学字段都必须携带 `provenance`，界面同时用文字标出性质，不能只靠颜色区分。
 
-环境要求：Node.js 22.13-24、pnpm 10。Expo SDK 57 的 CI 基线使用 Node.js 24。
+| 类型 | 含义 | 当前示例 |
+| --- | --- | --- |
+| `observed` | 来自可追溯公开资料的观测或权威参数快照 | 行星半径、轨道周期 |
+| `derived` | 由已声明输入和教学方法计算或整理 | J2000 简化轨道位置、ISS 静态教学轨道 |
+| `simulated` | 为比较方案而生成的任务模拟结果 | 教学窗口评分、航时、Delta-v、风险、推荐分 |
+| `fictional` | 服务于科幻叙事、现实中并不存在 | 阿尔忒弥斯月面基地、晨星火星港、地月 L1 中继站 |
 
-```bash
-pnpm install --frozen-lockfile
-pnpm dev
-```
+目录来源包括 NASA NSSDC、NASA Solar System Exploration、NASA ISS 资料和 JPL Small-Body Database；具体 URL、访问时间、方法说明与字段性质保存在 [`data/solar_system_catalog.json`](data/solar_system_catalog.json)。自然天体与 ISS 的当前位置由简化 J2000 开普勒模型推导，不是实时观测；虚构设施的位置继续保持 `fictional`；教学窗口基于圆轨道霍曼目标相位和目录演示基准相位生成。路线把起终点和地月 L1 中继站组成显式航路图，使用内置载具 profile（航程、允许的行星域、支持模式和单边 Delta-v 上限）做确定性多目标搜索；航时、Delta-v、风险、通信和窗口都是科普代理成本，所有路线仍标记为 `simulated`，不可视为实测或任务推荐。
 
-常用命令：
+## 技术架构
 
-```bash
-pnpm web                 # Web 预览
-pnpm ios                 # iOS 模拟器或真机
-pnpm android             # Android 模拟器或真机
-pnpm test                # 测试
-pnpm verify              # 格式、lint、类型、边界、测试、审计、Doctor、Android/Web 构建
-```
-
-## Android 发布
-
-`vMAJOR.MINOR.PATCH` annotated tag 会触发 `Android Release` workflow。流水线复跑全部质量门禁，再生成并验证以下 Android 产物：
-
-- `stellar-nav-android-arm64-v8a.apk`：绝大多数现代 Android 真机；
-- `stellar-nav-android-armeabi-v7a.apk`：仍使用 32 位 ARM 的旧设备；
-- `stellar-nav-android-x86_64.apk`：x86_64 模拟器或设备；
-- `stellar-nav-android.aab`：用于应用商店提交，不可直接安装；
-- `SHA256SUMS.txt`：三个 APK 与 AAB 的 SHA-256 校验值。
-
-每个 APK 只包含对应 ABI 的原生库，不发布通用 APK，也不提供 32 位 x86 APK。发布页同时保留 GitHub 构建来源证明。当前仅发布 Android，不发布 iOS 包。
-
-版本必须同时写入 `package.json`、`app.json` 和 `docs/releases/manifest.json`，Android `versionCode` 每次发布严格递增，发布证书公开指纹也由该清单锁定。正式签名使用仓库 Actions secrets 中的 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS` 与 `ANDROID_KEY_PASSWORD`，签名文件不会进入 Git；维护者必须保留受保护的离线备份，丢失密钥后无法继续覆盖安装升级。
-
-从 `main` 手工运行 workflow 只做签名构建演练，不创建 GitHub Release。演练通过并合入版本变更后，在与 `origin/main` 一致的干净 `main` 上使用本地脚本先预检、再发布：
-
-```bash
-./scripts/release.sh 0.0.2 --dry-run
-./scripts/release.sh 0.0.2
-```
-
-脚本会验证版本元数据，创建并推送 annotated tag；也可用 `--message` 自定义标签消息。已发布的 tag 和资产不应移动或覆盖。若版本出现阻断问题，应停止分发该版本、在 `main` 回退问题改动，并以更高的版本号和 `versionCode` 发布修复；Android 不支持用较低 `versionCode` 的旧包直接覆盖回滚。
-
-v0.0.2 发布说明见 [`docs/releases/0.0.2.md`](docs/releases/0.0.2.md)，ABI 拆包决策见 [`ADR-0007`](docs/decisions/0007-android-abi-split-releases.md)。v0.0.1 的历史发布方案保留在 [`ADR-0006`](docs/decisions/0006-android-release-packaging.md)。
-
-## 目录结构
+- Flutter 3.44.8 / Dart 3.12.2 负责跨平台应用、响应式布局和无障碍语义；
+- Riverpod 3.4.2 只保存搜索、选中对象、路线、时间和图层等低频产品状态；
+- `CustomPainter` 与 Flutter `AnimationController` 负责地图和逐帧动画，帧进度不写入 Riverpod；
+- Rust 1.96 workspace 负责目录、简化星历、转移窗口、路线和搜索；空间筛选与离线包格式保留为独立、可测试但尚未接入 App 的底层模块；
+- `flutter_rust_bridge` 2.12.0 通过带 `schemaVersion` / `catalogVersion` 的 JSON envelope 暴露低频同步调用；
+- Python 标准库工具在离线阶段校验目录结构、引用关系、数据性质和数值有效性，不进入 App 运行时。
 
 ```text
-src/app/                 屏幕组合、应用状态和动效偏好
-src/components/          导航栏、航路栏、弹层和底部控制
-src/core/                平台无关的路线计算、格式化和数据性质
-src/data/                版本化的演示天体、飞船与航线
-src/design/              颜色、间距、字体和圆角令牌
-src/renderer/            Skia 星图渲染适配层
-docs/decisions/          架构决策记录（含已取代历史）
-scripts/                 核心依赖边界和 Web 体积检查
+Flutter widgets / CustomPainter
+            |
+       Riverpod intent
+            |
+  NavigationRepository
+            |
+ flutter_rust_bridge
+            |
+       astro_engine
+            |
+  +---------+----------+-----------+
+  | catalog | ephemeris| route/time| search/index/tile
+  +---------+----------+-----------+
+            |
+ data/solar_system_catalog.json
+            ^
+ Python offline validator
 ```
 
-## 数据边界
+核心取舍见 [`docs/decisions/`](docs/decisions/)，完整产品与验收边界见 [`docs/spec.md`](docs/spec.md)。旧 Expo / React Native / TypeScript / Skia / Zustand 实现已经弃用，不能作为当前架构继续演进。
 
-界面会显式区分四种数据性质：`observed`（观测）、`derived`（由观测归一化推导）、`simulated`（演示模拟）和 `fictional`（虚构）。MVP 的距离来自小型版本化演示星表，路线、时间、燃料和风险来自确定性模拟模型；它们不会伪装成实时航天数据。
+## 本地开发
 
-## 性能约束
+环境基线：
 
-星图绘制放在 Skia，连续航行动画只更新 Reanimated shared values，不按帧写 React 或 Zustand。性能预算是生产模式目标 60 FPS、首屏演示数据同步解析低于 20 ms、Web 初始压缩 JavaScript 不超过 1.4 MB。安装阶段会把与当前 Skia 版本匹配的 CanvasKit WASM 生成到本地 `public` 目录，Web 运行时不依赖第三方 CDN。CI 会检查核心依赖边界、Web 体积预算、高危依赖审计，并运行 Expo Doctor。
+- Flutter `3.44.8`（包含 Dart `3.12.2`）；
+- Rust `1.96.0`；
+- `flutter_rust_bridge_codegen` `2.12.0`；
+- Web 构建需要 `wasm-pack` `0.15.0`，以及带 `rust-src` 和 `wasm32-unknown-unknown` target 的 `nightly-2026-08-01`；
+- iOS 或 Android 运行还需要对应的 Xcode / CocoaPods 或 Android SDK 工具链。
+- Android release 不会回退到 debug 签名；正式分发前必须在受控环境配置独立发布密钥。
 
-## 设计与演进
+安装依赖并执行完整质量门禁：
 
-产品规格见 [`docs/spec.md`](docs/spec.md)，关键取舍见 [`docs/decisions/`](docs/decisions/)。后续若接入 Gaia/SIMBAD/NASA 数据，需要单独完成来源许可、版本锁定、质量校验和展示口径评审。
+```bash
+flutter pub get
+./scripts/verify.sh
+```
 
-## 贡献
+运行 App：
 
-请先阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)。行为变更必须补测试，并在提交前运行 `pnpm verify`。
+```bash
+flutter run -d chrome
+flutter run -d <device-id>
+```
 
-## 许可证
+常用的窄范围检查：
 
-本项目代码以 MIT License 发布，见 [`LICENSE`](LICENSE)；许可证文件同时保留 Expo 模板的上游版权声明。第三方字体和依赖遵循各自许可证。
+```bash
+dart analyze lib test integration_test
+flutter test
+(cd native && cargo test --locked --workspace)
+(cd native && cargo clippy --locked --workspace --all-targets -- -D warnings)
+python3 -m unittest discover -s tools/data_pipeline/tests -p 'test_*.py'
+python3 -m unittest discover -s tools/licenses/tests -p 'test_*.py'
+python3 tools/licenses/generate_rust_licenses.py --check
+```
+
+仓库路径包含中文时，`flutter analyze` 在当前工具版本上可能因 LSP 消息解析失败；项目门禁使用 `dart analyze`。`./scripts/verify.sh` 是提交前的权威命令，它还会构建宿主 Rust 动态库并执行真实 bridge 冒烟测试，再检查格式、目录数据、桥接生成物、WebAssembly 和 Web 构建。
+
+## 目录
+
+```text
+lib/                         Flutter 应用、领域 DTO、导航功能与 FRB 生成代码
+native/astro_engine/         面向 Flutter 的 Rust 桥接门面
+native/crates/               可测试的 Rust 领域模块
+data/                        版本化太阳系目录
+tools/data_pipeline/         Python 离线目录校验工具
+tools/licenses/              Rust 三方许可证生成与审计覆盖
+test/                        Dart 单元与 Widget 测试
+integration_test/            Flutter 集成测试入口
+docs/spec.md                 产品、架构与验收规格
+docs/decisions/              Architecture Decision Records
+scripts/                     本地与 CI 共用的质量门禁
+```
+
+## 演进方向
+
+下一阶段应先深化太阳系，而不是把不同尺度的数据硬塞进同一画布：接入版本锁定的公开星历快照、更可靠的轨道转移算法、行星表面数据、离线瓦片和 3D 场景。扩展到恒星或星系尺度时，应新增 `systemId` 数据域和尺度适配器，保留现有对象 ID、来源边界和桥接版本协议。
+
+## 贡献与许可
+
+提交改动前请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md) 和 [`AGENTS.md`](AGENTS.md)。代码使用 MIT License，见 [`LICENSE`](LICENSE)；离线中文字体采用 SIL Open Font License，见 [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt)。Web 发行包还包含 Flutter notices，以及由锁定 Cargo 图和固定 nightly `build-std` 图共同生成的 [`rust-third-party-licenses.txt`](web/licenses/rust-third-party-licenses.txt)；数据源与其他视觉素材分别遵循其自身许可。
