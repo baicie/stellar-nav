@@ -29,9 +29,9 @@ android {
         namespace 'com.flutter_rust_bridge.astro_engine'
     }
 
-    // Bumping the plugin compileSdkVersion requires all clients of this plugin
-    // to bump the version in their app.
-    compileSdkVersion 33
+    // Keep the native plugin aligned with the host app so AndroidX metadata
+    // requirements cannot drift between the two Android modules.
+    compileSdkVersion rootProject.project(":app").android.compileSdkVersion
 
     // Use the NDK version
     // declared in /android/app/build.gradle file of the Flutter project.
