@@ -190,16 +190,20 @@ jobs:
           keystore="${RUNNER_TEMP}/astro-nav-release.jks"
           printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > "${keystore}"
           chmod 600 "${keystore}"
-          {
-            echo "ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_STORE_FILE=${keystore}"
-            echo "ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_STORE_PASSWORD=${ANDROID_KEYSTORE_PASSWORD}"
-            echo "ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_KEY_ALIAS=${ANDROID_KEY_ALIAS}"
-            echo "ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_KEY_PASSWORD=${ANDROID_KEY_PASSWORD}"
-            echo "ANDROID_EXPECTED_CERTIFICATE_SHA256=${{ needs.verify.outputs.certificate_sha256 }}"
-          } >> "${GITHUB_ENV}"
 
       - name: Build and verify signed split APKs
+        env:
+          ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_STORE_FILE: ${{ runner.temp }}/astro-nav-release.jks
+          ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_ASTRONAV_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_EXPECTED_CERTIFICATE_SHA256: ${{ needs.verify.outputs.certificate_sha256 }}
         run: ./scripts/package_android_release.sh "${{ needs.verify.outputs.version }}"
+
+      - name: Remove protected release keystore
+        if: always()
+        shell: bash
+        run: rm -f "${RUNNER_TEMP}/astro-nav-release.jks"
 
       - name: Attest Android APKs
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
@@ -213,11 +217,7 @@ jobs:
           path: release/android/
           if-no-files-found: error
           retention-days: 30
-
-      - name: Remove protected release keystore
-        if: always()
-        shell: bash
-        run: rm -f "${RUNNER_TEMP}/astro-nav-release.jks"
+          overwrite: true
 
   publish:
     name: Publish GitHub prerelease
@@ -265,6 +265,15 @@ jobs:
           set -euo pipefail
           notes_file="docs/releases/${RELEASE_VERSION}.md"
           test -s "${notes_file}"
+          immutable_releases_enabled="$(
+            gh api "repos/${GITHUB_REPOSITORY}/immutable-releases" \
+              --jq '.enabled'
+          )"
+          if [[ "${immutable_releases_enabled}" != "true" ]]; then
+            echo "Repository release immutability must be enabled before publishing." >&2
+            exit 1
+          fi
+
           expected_assets="$(
             printf '%s\n' \
               SHA256SUMS.txt \
@@ -274,52 +283,80 @@ jobs:
               release-metadata.json |
               sort
           )"
-          release_flags=()
-          if [[ "${IS_PRERELEASE}" == "true" ]]; then
-            release_flags+=(--prerelease)
+          expected_title="天枢导航 ${RELEASE_TAG} · Android 内测版"
+          expected_body="$(cat "${notes_file}")"
+          release_flags=(--prerelease="${IS_PRERELEASE}")
+          release_api="repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}"
+          release_json_file="$(mktemp "${RUNNER_TEMP}/release.XXXXXX.json")"
+          release_error_file="$(mktemp "${RUNNER_TEMP}/release.XXXXXX.error")"
+          release_exists=false
+
+          if gh api "${release_api}" \
+            > "${release_json_file}" 2> "${release_error_file}"; then
+            release_exists=true
+          elif grep -Fq '(HTTP 404)' "${release_error_file}"; then
+            release_exists=false
+          else
+            cat "${release_error_file}" >&2
+            echo "Unable to determine whether the release exists." >&2
+            exit 1
           fi
 
-          if gh release view "${RELEASE_TAG}" \
-            --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            existing_prerelease="$(
-              gh release view "${RELEASE_TAG}" \
-                --repo "${GITHUB_REPOSITORY}" \
-                --json isPrerelease \
-                --jq '.isPrerelease'
-            )"
-            if [[ "${existing_prerelease}" != "${IS_PRERELEASE}" ]]; then
-              echo "Existing release prerelease state is inconsistent." >&2
-              exit 1
-            fi
-
-            existing_assets_dir="$(mktemp -d "${RUNNER_TEMP}/existing-assets.XXXXXX")"
+          if [[ "${release_exists}" == "true" ]]; then
+            existing_is_draft="$(jq -r '.draft' "${release_json_file}")"
+            existing_is_immutable="$(jq -r '.immutable' "${release_json_file}")"
+            existing_is_prerelease="$(jq -r '.prerelease' "${release_json_file}")"
             actual_assets="$(
-              gh release view "${RELEASE_TAG}" \
-                --repo "${GITHUB_REPOSITORY}" \
-                --json assets \
-                --jq '.assets[].name' |
+              jq -r '.assets[].name' "${release_json_file}" |
                 sort
             )"
-            if [[ -n "${actual_assets}" ]]; then
-              gh release download "${RELEASE_TAG}" \
-                --repo "${GITHUB_REPOSITORY}" \
-                --pattern '*' \
-                --dir "${existing_assets_dir}"
-            fi
-            while IFS= read -r existing_asset; do
-              [[ -n "${existing_asset}" ]] || continue
-              if [[ ! -f "release-artifacts/${existing_asset}" ]]; then
-                echo "Existing release contains an unexpected asset: ${existing_asset}" >&2
-                exit 1
-              fi
-              if ! cmp --silent \
-                "release-artifacts/${existing_asset}" \
-                "${existing_assets_dir}/${existing_asset}"; then
-                echo "Existing release asset differs: ${existing_asset}" >&2
-                exit 1
-              fi
-            done <<< "${actual_assets}"
 
+            if [[ "${existing_is_draft}" == "true" && \
+                  "${existing_is_immutable}" != "false" ]]; then
+              echo "Existing draft reports an impossible immutable state." >&2
+              exit 1
+            fi
+            if [[ "${existing_is_draft}" == "false" && \
+                  ( "${existing_is_immutable}" != "true" || \
+                    "${existing_is_prerelease}" != "${IS_PRERELEASE}" ) ]]; then
+              echo "Existing published release state is inconsistent." >&2
+              exit 1
+            fi
+          else
+            gh release create "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --verify-tag \
+              --draft \
+              --title "${expected_title}" \
+              --notes-file "${notes_file}" \
+              "${release_flags[@]}"
+            existing_is_draft=true
+            existing_is_immutable=false
+            actual_assets=""
+          fi
+
+          existing_assets_dir="$(mktemp -d "${RUNNER_TEMP}/existing-assets.XXXXXX")"
+          if [[ -n "${actual_assets}" ]]; then
+            gh release download "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --pattern '*' \
+              --dir "${existing_assets_dir}"
+          fi
+          while IFS= read -r existing_asset; do
+            [[ -n "${existing_asset}" ]] || continue
+            if [[ ! -f "release-artifacts/${existing_asset}" ]]; then
+              echo "Existing release contains an unexpected asset: ${existing_asset}" >&2
+              exit 1
+            fi
+            if ! cmp --silent \
+              "release-artifacts/${existing_asset}" \
+              "${existing_assets_dir}/${existing_asset}"; then
+              echo "Existing release asset differs: ${existing_asset}" >&2
+              exit 1
+            fi
+          done <<< "${actual_assets}"
+
+          if [[ "${existing_is_draft}" == "true" ]]; then
             while IFS= read -r expected_asset; do
               if ! grep -Fqx "${expected_asset}" <<< "${actual_assets}"; then
                 gh release upload "${RELEASE_TAG}" \
@@ -328,31 +365,63 @@ jobs:
               fi
             done <<< "${expected_assets}"
 
+            draft_assets="$(
+              gh release view "${RELEASE_TAG}" \
+                --repo "${GITHUB_REPOSITORY}" \
+                --json assets \
+                --jq '.assets[].name' |
+                sort
+            )"
+            if [[ "${draft_assets}" != "${expected_assets}" ]]; then
+              echo "Draft release assets are incomplete or unexpected." >&2
+              exit 1
+            fi
+            draft_assets_dir="$(mktemp -d "${RUNNER_TEMP}/draft-assets.XXXXXX")"
+            gh release download "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --pattern '*' \
+              --dir "${draft_assets_dir}"
+            while IFS= read -r expected_asset; do
+              if ! cmp --silent \
+                "release-artifacts/${expected_asset}" \
+                "${draft_assets_dir}/${expected_asset}"; then
+                echo "Uploaded draft asset differs: ${expected_asset}" >&2
+                exit 1
+              fi
+            done <<< "${expected_assets}"
+
             gh release edit "${RELEASE_TAG}" \
               --repo "${GITHUB_REPOSITORY}" \
-              --title "天枢导航 ${RELEASE_TAG} · Android 内测版" \
+              --title "${expected_title}" \
               --notes-file "${notes_file}" \
+              --draft=false \
               "${release_flags[@]}"
-          else
-            gh release create "${RELEASE_TAG}" release-artifacts/* \
-              --repo "${GITHUB_REPOSITORY}" \
-              --verify-tag \
-              --title "天枢导航 ${RELEASE_TAG} · Android 内测版" \
-              --notes-file "${notes_file}" \
-              "${release_flags[@]}"
-          fi
-
-          actual_assets="$(
-            gh release view "${RELEASE_TAG}" \
-              --repo "${GITHUB_REPOSITORY}" \
-              --json assets \
-              --jq '.assets[].name' |
-              sort
-          )"
-          if [[ "${actual_assets}" != "${expected_assets}" ]]; then
-            echo "Published GitHub release assets are incomplete or unexpected." >&2
+          elif [[ "${actual_assets}" != "${expected_assets}" ]]; then
+            echo "Existing immutable release assets are incomplete or unexpected." >&2
             exit 1
           fi
-          gh release view "${RELEASE_TAG}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --json url,isPrerelease,assets
+
+          final_release_json="$(
+            gh release view "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --json assets,body,isDraft,isImmutable,isPrerelease,name,url
+          )"
+          published_is_draft="$(jq -r '.isDraft' <<< "${final_release_json}")"
+          published_is_immutable="$(jq -r '.isImmutable' <<< "${final_release_json}")"
+          published_is_prerelease="$(jq -r '.isPrerelease' <<< "${final_release_json}")"
+          published_title="$(jq -r '.name' <<< "${final_release_json}")"
+          published_body="$(jq -r '.body' <<< "${final_release_json}")"
+          published_assets="$(
+            jq -r '.assets[].name' <<< "${final_release_json}" |
+              sort
+          )"
+          if [[ "${published_is_draft}" != "false" || \
+                "${published_is_immutable}" != "true" || \
+                "${published_is_prerelease}" != "${IS_PRERELEASE}" || \
+                "${published_title}" != "${expected_title}" || \
+                "${published_body}" != "${expected_body}" || \
+                "${published_assets}" != "${expected_assets}" ]]; then
+            echo "Published GitHub release state is invalid." >&2
+            exit 1
+          fi
+          printf '%s\n' "${final_release_json}"

@@ -16,6 +16,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("./scripts/package_android_release.sh", workflow)
         self.assertIn("--split-per-abi", self._package_script())
         self.assertNotIn("secrets.ANDROID_", workflow)
+        self.assertIn("overwrite: true", workflow)
 
     def test_release_workflow_signs_attests_and_publishes_a_prerelease(self) -> None:
         workflow = (PROJECT_ROOT / ".github/workflows/release.yml").read_text(
@@ -36,6 +37,21 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("--clobber", workflow)
         self.assertIn("outputs.certificate_sha256", workflow)
         self.assertNotIn("outputs.certificate-sha256", workflow)
+        self.assertNotIn('>> "${GITHUB_ENV}"', workflow)
+        self.assertIn("repos/${GITHUB_REPOSITORY}/immutable-releases", workflow)
+        self.assertIn("--draft", workflow)
+        self.assertIn("--draft=false", workflow)
+        self.assertIn(
+            "--json assets,body,isDraft,isImmutable,isPrerelease,name,url",
+            workflow,
+        )
+        self.assertIn("Existing published release state is inconsistent.", workflow)
+        self.assertIn("Unable to determine whether the release exists.", workflow)
+        self.assertIn("overwrite: true", workflow)
+        self.assertLess(
+            workflow.index("Remove protected release keystore"),
+            workflow.index("Attest Android APKs"),
+        )
 
         for asset_name in (
             "astro-nav-android-arm64-v8a.apk",
@@ -73,6 +89,17 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("getExecOperations()", plugin)
         self.assertIn("execOperations.exec", plugin)
         self.assertNotIn("project.exec", plugin)
+
+    def test_native_android_plugin_tracks_the_app_compile_sdk(self) -> None:
+        build_file = (
+            PROJECT_ROOT / "rust_builder/android/build.gradle"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'compileSdkVersion rootProject.project(":app").android.compileSdkVersion',
+            build_file,
+        )
+        self.assertNotIn("compileSdkVersion 33", build_file)
 
     @staticmethod
     def _package_script() -> str:

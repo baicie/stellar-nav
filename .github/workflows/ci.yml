@@ -161,6 +161,7 @@ jobs:
           path: release/android/
           if-no-files-found: error
           retention-days: 7
+          overwrite: true
 
       - name: Remove CI signing key
         if: always()
