@@ -270,7 +270,7 @@ Rust 调用仅发生在目录加载、搜索、提交时间、修改起终点或
    - JSON 结构、唯一性、层级、来源、性质、UTC 时间与有限数值；
    - 仓库实际目录必须零错误。
 6. Build and visual checks
-   - bridge / WASM 生成物无漂移；
+   - bridge 生成物无漂移，WASM 运行时契约和 Web 构建通过；
    - `flutter build web` 成功；
    - 320 x 568、390 x 844、平板和宽屏无重叠、裁切、空白画布或控制台错误。
 7. Android beta packaging
