@@ -258,14 +258,9 @@ jobs:
           set -euo pipefail
           notes_file="docs/releases/${RELEASE_VERSION}.md"
           test -s "${notes_file}"
-          immutable_releases_enabled="$(
-            gh api "repos/${GITHUB_REPOSITORY}/immutable-releases" \
-              --jq '.enabled'
-          )"
-          if [[ "${immutable_releases_enabled}" != "true" ]]; then
-            echo "Repository release immutability must be enabled before publishing." >&2
-            exit 1
-          fi
+          # The immutable-releases setting is an Administration endpoint that the
+          # workflow GITHUB_TOKEN cannot read. The published release state below
+          # is the authoritative check and fails closed when immutability is off.
 
           verify_remote_release_tag() {
             local remote_ref="refs/release-verification/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
