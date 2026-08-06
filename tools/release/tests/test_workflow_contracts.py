@@ -64,6 +64,16 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("app-release.apk", script)
         self.assertNotIn("debug.keystore", script)
 
+    def test_cargokit_uses_gradle_nine_exec_operations(self) -> None:
+        plugin = (PROJECT_ROOT / "rust_builder/cargokit/gradle/plugin.gradle").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("ExecOperations", plugin)
+        self.assertIn("getExecOperations()", plugin)
+        self.assertIn("execOperations.exec", plugin)
+        self.assertNotIn("project.exec", plugin)
+
     @staticmethod
     def _package_script() -> str:
         return (PROJECT_ROOT / "scripts/package_android_release.sh").read_text(
