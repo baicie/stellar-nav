@@ -57,7 +57,7 @@ jobs:
           --target wasm32-unknown-unknown
 
       - name: Install bridge build tools
-        uses: taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8 # v2.85.8
+        uses: taiki-e/install-action@6cd13508893c0e7eab5f273c2575d3859bd7229a # v2.86.6
         with:
           tool: >-
             flutter_rust_bridge_codegen@${{ env.FRB_VERSION }},
