@@ -37,7 +37,7 @@ dependencies:
   astro_engine:
     path: rust_builder
   flutter_rust_bridge: 2.12.0
-  flutter_riverpod: ^3.4.2
+  flutter_riverpod: ^3.4.3
   lucide_icons_flutter: ^3.1.15
 
 dev_dependencies:
