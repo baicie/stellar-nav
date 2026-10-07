@@ -33,7 +33,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  cupertino_icons: ^1.0.8
+  cupertino_icons: ^2.0.0
   astro_engine:
     path: rust_builder
   flutter_rust_bridge: 2.12.0
